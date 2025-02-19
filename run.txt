@@ -1,0 +1,8 @@
+docker network create chord-network
+
+docker run --name bootstrap --network chord-network --env-file .env -p 8000:8000 --rm chordify python bootstrap.py
+
+curl -X POST http://127.0.0.1:8001/insert -H "Content-Type: application/json" -d '{"key": "song1", "value": "node8001"}'
+
+curl -X GET "http://127.0.0.1:8001/query?key=song1"
+
