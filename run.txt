@@ -1,3 +1,4 @@
+//// Docker file
 docker network create chord-network
 
 docker run --name bootstrap --network chord-network --env-file .env -p 8000:8000 --rm chordify python bootstrap.py
@@ -5,4 +6,33 @@ docker run --name bootstrap --network chord-network --env-file .env -p 8000:8000
 curl -X POST http://127.0.0.1:8001/insert -H "Content-Type: application/json" -d '{"key": "song1", "value": "node8001"}'
 
 curl -X GET "http://127.0.0.1:8001/query?key=song1"
+
+
+///// Docker compose yml
+sudo docker-compose build
+sudo docker-compose up
+    (Debugger on -> Οταν αλλαζεις κατι απλα κλεινεις και ξανακανεις up)
+
+// get network
+curl -X GET http://127.0.0.1:8001/overlay
+
+curl -X POST http://localhost:8002/depart
+
+ - Extra join δεν εχω βρει πως να κανεις αλλα δεν νομιζω οτι χρειαζεται κιολας 
+ - Δηλαδή σίγουρα καλο ειναι να ξερεις πως γίνεται, αλλά για αυτή την στιγμή είμαστε καλα
+ - Μαλλον με καποιο docker run ---name node5 κατι τετοιο
+
+//////////////
+nodes
+3
+1153412323553608433409003516544375445689255214539
+
+2
+1094592468334682115993406799157015824791113659155
+
+4
+300958178807431293100459636149632972812029243419
+
+1
+171865491289448819003469989719053766790160449571
 

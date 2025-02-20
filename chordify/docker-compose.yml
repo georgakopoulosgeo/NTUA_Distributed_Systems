@@ -1,0 +1,111 @@
+version: '3'
+
+services:
+  # -- Bootstrap Node --
+  bootstrap:
+    build: .
+    container_name: bootstrap
+    # Συνδέουμε τον τοπικό φάκελο στο /app του container (bind mount)
+    volumes:
+      - .:/app
+    # Ρυθμίζουμε περιβάλλον development για Flask
+    environment:
+      - IP=0.0.0.0
+      - PORT=8000
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    ports:
+      - "8000:8000"
+    command: >
+      python api.py
+      --ip 0.0.0.0
+      --port 8000
+      --bootstrap
+
+  # -- Node 1 --
+  node1:
+    build: .
+    container_name: node1
+    depends_on:
+      - bootstrap
+    volumes:
+      - .:/app
+    environment:
+      - IP=node1
+      - PORT=8001
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    ports:
+      - "8001:8001"
+    command: >
+      python api.py
+      --ip node1
+      --port 8001
+      --bootstrap_ip bootstrap
+      --bootstrap_port 8000
+
+  # -- Node 2 --
+  node2:
+    build: .
+    container_name: node2
+    depends_on:
+      - bootstrap
+    volumes:
+      - .:/app
+    environment:
+      - IP=node2
+      - PORT=8002
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    ports:
+      - "8002:8002"
+    command: >
+      python api.py
+      --ip node2
+      --port 8002
+      --bootstrap_ip bootstrap
+      --bootstrap_port 8000
+
+  # -- Node 3 --
+  node3:
+    build: .
+    container_name: node3
+    depends_on:
+      - bootstrap
+    volumes:
+      - .:/app
+    environment:
+      - IP=node3
+      - PORT=8003
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    ports:
+      - "8003:8003"
+    command: >
+      python api.py
+      --ip node3
+      --port 8003
+      --bootstrap_ip bootstrap
+      --bootstrap_port 8000
+
+  # -- Node 4 --
+  node4:
+    build: .
+    container_name: node4
+    depends_on:
+      - bootstrap
+    volumes:
+      - .:/app
+    environment:
+      - IP=node4
+      - PORT=8004
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    ports:
+      - "8004:8004"
+    command: >
+      python api.py
+      --ip node4
+      --port 8004
+      --bootstrap_ip bootstrap
+      --bootstrap_port 8000
