@@ -13,6 +13,18 @@ sudo docker-compose build
 sudo docker-compose up
     (Debugger on -> Οταν αλλαζεις κατι απλα κλεινεις και ξανακανεις up)
 
+// New node
+sudo docker run -d \
+    --network chordify_default \
+    --name node7 \
+    -v $(pwd):/app \
+    -e IP=node7 \
+    -e PORT=8007 \
+    -p 8007:8007 \
+    chordify \
+    python api.py --ip node7 --port 8007 --bootstrap_ip bootstrap --bootstrap_port 8000
+
+
 // get network
 curl -X GET http://127.0.0.1:8001/overlay
 
@@ -30,9 +42,22 @@ nodes
 2
 1094592468334682115993406799157015824791113659155
 
+5
+605907502187820619582591828504881381613563872501
+
 4
 300958178807431293100459636149632972812029243419
+
+6
+219554627954620086306823540638194890711608052240
 
 1
 171865491289448819003469989719053766790160449571
 
+1420581437667931473358569046990045498294268739854 - song1
+897157909036590648573699943635484619774617861767 - yolo
+
+/// insert / query / delete
+curl -X POST http://node3:8003/insert \
+     -H "Content-Type: application/json" \
+     -d '{"key": "Imagine", "value": "random"}'

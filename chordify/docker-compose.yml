@@ -14,6 +14,7 @@ services:
       - PORT=8000
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
     ports:
       - "8000:8000"
     command: >
@@ -35,6 +36,7 @@ services:
       - PORT=8001
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
     ports:
       - "8001:8001"
     command: >
@@ -57,6 +59,7 @@ services:
       - PORT=8002
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
     ports:
       - "8002:8002"
     command: >
@@ -79,6 +82,7 @@ services:
       - PORT=8003
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
     ports:
       - "8003:8003"
     command: >
@@ -101,6 +105,7 @@ services:
       - PORT=8004
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
     ports:
       - "8004:8004"
     command: >
@@ -108,4 +113,5 @@ services:
       --ip node4
       --port 8004
       --bootstrap_ip bootstrap
-      --bootstrap_port 8000
+      --bootstrap_port 8000 
+    

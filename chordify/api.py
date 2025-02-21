@@ -1,3 +1,4 @@
+import hashlib
 from flask import Flask, request, jsonify
 import argparse
 import requests
@@ -50,6 +51,8 @@ def update_ring(new_node_info):
         }
     return ring
 
+# Στο api.py
+
 @app.route("/join", methods=["POST"])
 def join():
     # Μόνο ο bootstrap κόμβος δέχεται join requests
@@ -60,30 +63,62 @@ def join():
     new_node_ip = data.get("ip")
     new_node_port = data.get("port")
     new_node_id = data.get("id")
-    
     new_node_info = {"ip": new_node_ip, "port": new_node_port, "id": new_node_id}
-    print(f"Νέος κόμβος joining: IP: {new_node_ip}, Port: {new_node_port}, ID: {new_node_id}")
-    
-    # Ενημέρωση του ring με τον νέο κόμβο
-    update_ring(new_node_info)
-    
-    # Εύρεση της θέσης του νέου κόμβου στο ring και απόδοση των pointers
-    new_node_index = next((i for i, n in enumerate(ring) if n['id'] == new_node_id), None)
-    if new_node_index is not None:
-        successor = ring[new_node_index]['successor']
-        predecessor = ring[new_node_index]['predecessor']
-    else:
-        # Σε περίπτωση σφάλματος, επιστρέφουμε τα στοιχεία του bootstrap
-        successor = {"ip": node.ip, "port": node.port, "id": node.id}
-        predecessor = {"ip": node.ip, "port": node.port, "id": node.id}
+    print(f"[Bootstrap] Node joining: {new_node_info}")
 
-    # Επιστροφή των ενημερωμένων πληροφοριών στον joining κόμβο
-    return jsonify({
-        "message": "Επιτυχής ένταξη",
-        "successor": successor,
-        "predecessor": predecessor,
-        "ring": ring  # Μπορείτε να το συμπεριλάβετε για debugging
-    }), 200
+    global ring
+    # Προσθήκη του νέου κόμβου στο ring, αν δεν υπάρχει ήδη
+    if not any(n["id"] == new_node_id for n in ring):
+        ring.append(new_node_info)
+
+    # Επαναϋπολογισμός του ring (ταξινόμηση και αναθεώρηση των pointers)
+    ring.sort(key=lambda n: n["id"])
+    n = len(ring)
+    for i in range(n):
+        successor = ring[(i + 1) % n]
+        predecessor = ring[(i - 1) % n]
+        ring[i]["successor"] = {"ip": successor["ip"], "port": successor["port"], "id": successor["id"]}
+        ring[i]["predecessor"] = {"ip": predecessor["ip"], "port": predecessor["port"], "id": predecessor["id"]}
+
+    # Broadcast: Ενημέρωση όλων των κόμβων στο ring για τους νέους pointers
+    for n_info in ring:
+        # Αν ο κόμβος είναι ο bootstrap, ενημέρωσε το τοπικό node object
+        if n_info["ip"] == node.ip and n_info["port"] == node.port:
+            node.update_neighbors(n_info["successor"], n_info["predecessor"])
+        else:
+            try:
+                url = f"http://{n_info['ip']}:{n_info['port']}/update_neighbors"
+                payload = {
+                    "successor": n_info["successor"],
+                    "predecessor": n_info["predecessor"]
+                }
+                requests.post(url, json=payload)
+            except Exception as e:
+                print(f"[Bootstrap] Σφάλμα κατά την ενημέρωση του κόμβου {n_info}: {e}")
+
+    # Εύρεση του joining κόμβου στο ring για να επιστραφούν τα pointers του
+    for entry in ring:
+        if entry["id"] == new_node_id:
+            return jsonify({
+                "message": "Επιτυχής ένταξη",
+                "successor": entry["successor"],
+                "predecessor": entry["predecessor"],
+                "ring": ring  # Προαιρετικό για debugging
+            }), 200
+
+    return jsonify({"error": "Ο νέος κόμβος δεν βρέθηκε στο ring"}), 500
+
+
+@app.route("/update_neighbors", methods=["POST"])
+def update_neighbors():
+    data = request.get_json()
+    new_successor = data.get("successor")
+    new_predecessor = data.get("predecessor")
+    print(f"[{node.ip}:{node.port}] Ενημέρωση γειτόνων: successor={new_successor}, predecessor={new_predecessor}")
+    node.update_neighbors(new_successor, new_predecessor)
+    return jsonify({"message": "Neighbors updated successfully"}), 200
+
+
 
 ############################################################################################################
 #DEPART
@@ -97,11 +132,9 @@ def serialize_node_info(n):
 
 @app.route("/remove_node", methods=["POST"])
 def remove_node():
-    """
-    Ο κόμβος που θέλει να αποχωρήσει στέλνει εδώ τα στοιχεία του.
-    Ο bootstrap αφαιρεί τον κόμβο από το ring και επαναϋπολογίζει τους predecessor και successor
-    για όλους τους υπόλοιπους κόμβους, ώστε να μην υπάρχουν circular references.
-    """
+    # Ο κόμβος που θέλει να αποχωρήσει στέλνει εδώ τα στοιχεία του.
+    # Ο bootstrap αφαιρεί τον κόμβο από το ring και επαναϋπολογίζει τους predecessor και successor
+    # για όλους τους υπόλοιπους κόμβους, ώστε να μην υπάρχουν circular references.
     if not node.is_bootstrap:
         return jsonify({"error": "Only bootstrap can remove a node from ring"}), 400
 
@@ -166,6 +199,11 @@ def depart():
 ############################################################################################################
 # INSERT, QUERY, DELETE
 
+def compute_hash(self, key):
+    # Υπολογισμός του SHA1 hash ενός string και επιστροφή ως ακέραιος.
+    h = hashlib.sha1(key.encode('utf-8')).hexdigest()
+    return int(h, 16)
+
 @app.route("/insert", methods=["POST"])
 def insert():
     # Endpoint εισαγωγής ενός key-value ζεύγους.
@@ -174,6 +212,9 @@ def insert():
     key = data.get("key")
     value = data.get("value")
     result = node.insert(key, value)
+    #  print hash of key   
+    key_hash = compute_hash(node, key)
+    print(f"[{node.ip}:{node.port}] Αίτημα insert για το key '{key}' (hash: {key_hash}).")
     return jsonify({"result": result, "data_store": node.data_store}), 200
 
 @app.route("/query/<key>", methods=["GET"])
@@ -204,7 +245,17 @@ def overlay():
     # Αν ο κόμβος είναι bootstrap, επιστρέφει το τοπικό ring.
     # Αν όχι, μπορεί να ζητήσει πληροφορίες από τον bootstrap.
     if node.is_bootstrap:
-        return jsonify({"ring": ring}), 200
+        # Σχηματίζω το json που θα επιστρέψω
+        minimal_ring = []
+        for entry in ring:
+            minimal_ring.append({
+                "id": entry["id"],
+                "ip": entry["ip"],
+                "port": entry["port"],
+                "predecessor": entry["predecessor"]["ip"],
+                "successor": entry["successor"]["ip"]
+            })
+        return jsonify({"ring": minimal_ring}), 200
     else:
         try:
             bootstrap_url = f"http://{node.bootstrap_ip}:{node.bootstrap_port}/overlay"
@@ -247,8 +298,8 @@ if __name__ == '__main__':
         bootstrap_info = {"ip": node.ip, "port": node.port, "id": node.id}
         ring.append(bootstrap_info)
         # Ο ίδιος ο bootstrap είναι και predecessor και successor του (self-loop)
-        bootstrap_info['successor'] = bootstrap_info
-        bootstrap_info['predecessor'] = bootstrap_info
-        print("Είμαι ο Bootstrap κόμβος.")
+        #bootstrap_info['successor'] = bootstrap_info
+        #bootstrap_info['predecessor'] = bootstrap_info
+        #print("Είμαι ο Bootstrap κόμβος.")
 
-    app.run(host="0.0.0.0", port=args.port, debug=True)
+    app.run(host="0.0.0.0", port=args.port, debug=True, use_reloader=False)

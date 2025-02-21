@@ -12,9 +12,10 @@ class Node:
         self.is_bootstrap = is_bootstrap
         # Αν ο κόμβος δεν είναι bootstrap, υπολογίζουμε το id από το hash της ip:port.
         self.id = 0 if is_bootstrap else self.compute_hash(f"{self.ip}:{self.port}")
-        self.successor = None  # Πληροφορίες για τον επόμενο κόμβο στο δακτύλιο
-        self.predecessor = None  # Πληροφορίες για τον προηγούμενο κόμβο (αν χρειαστεί)
+        self.successor = {}  # Πληροφορίες για τον επόμενο κόμβο στο δακτύλιο
+        self.predecessor = {} # Πληροφορίες για τον προηγούμενο κόμβο (αν χρειαστεί)
         self.data_store = {}   # Αποθήκη για τα key-value δεδομένα
+
 
     def compute_hash(self, key):
         # Υπολογισμός του SHA1 hash ενός string και επιστροφή ως ακέραιος.
@@ -22,20 +23,62 @@ class Node:
         return int(h, 16)
 
     def update_neighbors(self, successor, predecessor):
-        # Ενημέρωση των δεικτών για successor και predecessor.
+        # Ενημέρωση των δεδομένων για τον successor και τον predecessor.
         self.successor = successor
         self.predecessor = predecessor
 
-    def insert(self, key, value):
-        # Εισαγωγή (ή ενημέρωση) ενός key-value ζεύγους.
-        # Στην περίπτωση του replication k=1 αποθηκεύουμε απλά το ζεύγος στο τοπικό data_store.
-        self.data_store[key] = value
-        return True
+    def is_responsible(self, key_hash: int) -> bool:
+        # Έλεγχος αν ο κόμβος είναι υπεύθυνος για ένα key με βάση το hash του.
+        if self.is_bootstrap:
+            return True
+        # Έλεγχος αν το key_hash είναι μέσα στο διάστημα (predecessor, self]
+        if self.predecessor["id"] < self.id:
+            return self.predecessor["id"] < key_hash <= self.id
+        else:
+            return self.predecessor["id"] < key_hash or key_hash <= self.id
+
+
+
+    def insert(self, key: str, value: str) -> bool:
+        # Υλοποιεί το insert του <key, value> ζεύγους σύμφωνα με τον Chord,
+        key_hash = self.compute_hash(key)
+        # print(f"[{self.ip}:{self.port}] Αίτημα insert για το key '{key}' (hash: {key_hash}).")
+        if self.is_responsible(key_hash):
+            # Εάν το key υπάρχει ήδη, ενημέρωσε το value (concat)
+            if key in self.data_store:
+                self.data_store[key] += f";{value}"
+            else:
+                self.data_store[key] = value
+            print(f"[{self.ip}:{self.port}] Αποθήκευσε το key '{key}' (hash: {key_hash}) τοπικά.")
+            return True
+        else:
+            # Προώθησε το αίτημα στον successor.
+            #{
+            #    "id": entry["id"],
+            #    "ip": entry["ip"],
+            #    "port": entry["port"]
+            #}
+            successor_ip = self.successor.get("ip")
+            successor_port = self.successor.get("port")
+            # Αν η ip του successor είναι 0.0.0.0 τοτε χρησιμοοποίησε την ip του bootstrap
+            if successor_ip == "0.0.0.0":
+                successor_ip = self.bootstrap_ip
+            url = f"http://{successor_ip}:{successor_port}/insert"
+            try:
+                print(f"[{self.ip}:{self.port}] Προώθηση του key '{key}' (hash: {key_hash}) στον successor {successor_ip}:{successor_port}.")
+                response = requests.post(url, json={"key": key, "value": value})
+                # Αναμενόμενη επιστροφή από τον κόμβο-στόχο
+                return response.json().get("result", False)
+            except Exception as e:
+                print(f"Σφάλμα κατά την προώθηση στο {successor_ip}:{successor_port}: {e}")
+                return False
 
     def query(self, key):
         # Αναζήτηση ενός key στο τοπικό data_store.
         # Επιστρέφει το value αν βρεθεί, αλλιώς None.
-        return self.data_store.get(key, None)
+        if key in self.data_store:
+            return self.data_store[key]
+        return None
 
     def delete(self, key):
         # Διαγραφή ενός key από το data_store.
