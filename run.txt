@@ -7,6 +7,15 @@ curl -X POST http://127.0.0.1:8001/insert -H "Content-Type: application/json" -d
 
 curl -X GET "http://127.0.0.1:8001/query?key=song1"
 
+//// On Windows, instead of -X POST, GET 
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1", "value": "Imagine"}'
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/query/song1" -Method Get
+
 
 ///// Docker compose yml
 sudo docker-compose build
