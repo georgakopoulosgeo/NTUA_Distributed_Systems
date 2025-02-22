@@ -1,7 +1,7 @@
 # bootstrap.py
 import argparse
 from node import Node
-from api import app
+from chordify.app import app
 
 if __name__ == '__main__':
     # Διαβάζουμε παραμέτρους γραμμής εντολών για τον bootstrap κόμβο.
@@ -14,8 +14,8 @@ if __name__ == '__main__':
     bootstrap_node = Node(ip=args.ip, port=args.port, is_bootstrap=True)
     
     # Αντιστοιχίζουμε το global node στο api module στον bootstrap κόμβο.
-    import api
-    api.node = bootstrap_node
+    import chordify.app as app
+    app.node = bootstrap_node
 
     print("Εκκίνηση Bootstrap κόμβου στη διεύθυνση {}:{}".format(args.ip, args.port))
     app.run(host="0.0.0.0", port=args.port, debug=True)

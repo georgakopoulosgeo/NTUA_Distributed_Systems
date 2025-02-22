@@ -18,7 +18,7 @@ services:
     ports:
       - "8000:8000"
     command: >
-      python api.py
+      python app.py
       --ip 0.0.0.0
       --port 8000
       --bootstrap
@@ -40,7 +40,7 @@ services:
     ports:
       - "8001:8001"
     command: >
-      python api.py
+      python app.py
       --ip node1
       --port 8001
       --bootstrap_ip bootstrap
@@ -63,7 +63,7 @@ services:
     ports:
       - "8002:8002"
     command: >
-      python api.py
+      python app.py
       --ip node2
       --port 8002
       --bootstrap_ip bootstrap
@@ -86,7 +86,7 @@ services:
     ports:
       - "8003:8003"
     command: >
-      python api.py
+      python app.py
       --ip node3
       --port 8003
       --bootstrap_ip bootstrap
@@ -109,7 +109,7 @@ services:
     ports:
       - "8004:8004"
     command: >
-      python api.py
+      python app.py
       --ip node4
       --port 8004
       --bootstrap_ip bootstrap
