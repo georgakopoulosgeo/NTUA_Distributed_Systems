@@ -23,7 +23,7 @@ services:
       --port 8000
       --bootstrap
 
-  # -- Node 1 --
+  # - "- Node 1 --
   node1:
     build: .
     container_name: node1
@@ -40,11 +40,11 @@ services:
     ports:
       - "8001:8001"
     command: >
-      python app.py
+      sh -c "sleep 1 && python app.py
       --ip node1
       --port 8001
       --bootstrap_ip bootstrap
-      --bootstrap_port 8000
+      --bootstrap_port 8000 "
 
   # -- Node 2 --
   node2:
@@ -63,11 +63,11 @@ services:
     ports:
       - "8002:8002"
     command: >
-      python app.py
+      sh -c "sleep 2 && python app.py
       --ip node2
       --port 8002
       --bootstrap_ip bootstrap
-      --bootstrap_port 8000
+      --bootstrap_port 8000 "
 
   # -- Node 3 --
   node3:
@@ -86,11 +86,11 @@ services:
     ports:
       - "8003:8003"
     command: >
-      python app.py
+      sh -c "sleep 3 && python app.py
       --ip node3
       --port 8003
       --bootstrap_ip bootstrap
-      --bootstrap_port 8000
+      --bootstrap_port 8000 "
 
   # -- Node 4 --
   node4:
@@ -109,9 +109,9 @@ services:
     ports:
       - "8004:8004"
     command: >
-      python app.py
+      sh -c "sleep 4 && python app.py
       --ip node4
       --port 8004
       --bootstrap_ip bootstrap
-      --bootstrap_port 8000 
+      --bootstrap_port 8000 " 
     
