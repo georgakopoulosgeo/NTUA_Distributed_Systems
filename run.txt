@@ -25,13 +25,13 @@ sudo docker-compose up
 // New node
 sudo docker run -d \
     --network chordify_default \
-    --name node7 \
+    --name node5 \
     -v $(pwd):/app \
-    -e IP=node7 \
-    -e PORT=8007 \
-    -p 8007:8007 \
+    -e IP=node5 \
+    -e PORT=8005 \
+    -p 8005:8005 \
     chordify \
-    python api.py --ip node7 --port 8007 --bootstrap_ip bootstrap --bootstrap_port 8000
+    python app.py --ip node5 --port 8005 --bootstrap_ip bootstrap --bootstrap_port 8000
 
 
 // get network

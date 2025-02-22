@@ -34,23 +34,7 @@ def join():
         ring[i]["successor"] = {"ip": successor["ip"], "port": successor["port"], "id": successor["id"]}
         ring[i]["predecessor"] = {"ip": predecessor["ip"], "port": predecessor["port"], "id": predecessor["id"]}
 
-    # Broadcast: Ενημέρωση όλων των κόμβων στο ring για τους νέους pointers
-    for n_info in ring:
-        # Αν ο κόμβος είναι ο bootstrap, ενημέρωσε το τοπικό node object
-        if n_info["ip"] == node.ip and n_info["port"] == node.port:
-            node.update_neighbors(n_info["successor"], n_info["predecessor"])
-        else:
-            try:
-                url = f"http://{n_info['ip']}:{n_info['port']}/update_neighbors"
-                #url = f"http://localhost:{n_info['port']}/update_neighbors"
-                payload = {
-                    "successor": n_info["successor"],
-                    "predecessor": n_info["predecessor"]
-                }
-                requests.post(url, json=payload)
-            except Exception as e:
-                print(f"[Bootstrap] Σφάλμα κατά την ενημέρωση του κόμβου {n_info}: {e}")
-
+    
     # Write ring back to app.config
     current_app.config['RING'] = ring
 
@@ -74,3 +58,16 @@ def update_neighbors():
     print(f"[{node.ip}:{node.port}] Ενημέρωση γειτόνων: successor={new_successor}, predecessor={new_predecessor}")
     node.update_neighbors(new_successor, new_predecessor)
     return jsonify({"message": "Neighbors updated successfully"}), 200
+
+@join_bp.route("/get_neighbors", methods=["GET"])
+def get_neighbors():
+    # Optional endpoint so a node can pull its neighbor info if needed.
+    node = current_app.config['NODE']
+    ring = current_app.config.get('RING', [])
+    for entry in ring:
+        if entry["id"] == node.id:
+            return jsonify({
+                "successor": entry.get("successor"),
+                "predecessor": entry.get("predecessor")
+            }), 200
+    return jsonify({"error": "Node not found in ring"}), 404

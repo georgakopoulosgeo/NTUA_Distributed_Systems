@@ -128,12 +128,46 @@ class Node:
                 return aggregated_data
 
     def delete(self, key):
-        # Διαγραφή ενός key από το data_store.
-        # Επιστρέφει True αν διαγράφηκε, αλλιώς False.
-        if key in self.data_store:
-            del self.data_store[key]
-            return True
-        return False
+        # Check if i am responsible for the key
+        key_hash = self.compute_hash(key)
+        if self.is_responsible(key_hash):
+            if key in self.data_store:
+                del self.data_store[key]
+                # Build the final JSON response for a successful delete
+                return {
+                    "result": True,
+                    "message": f"Key '{key}' deleted from node {self.ip}",
+                    "data_store": self.data_store,
+                    "ip": self.ip
+                }
+            else:
+                # Key not found on this node
+                return {
+                    "result": False,
+                    "error": f"Key '{key}' not found on node {self.ip}",
+                    "ip": self.ip
+                }
+        else:
+            # Forward the request to the successor
+            successor_ip = self.successor.get("ip")
+            successor_port = self.successor.get("port")
+            if successor_ip == "0.0.0.0": 
+                #
+                # ALERT: In AWS this will not work
+                # We will want: successor_ip = self.bootstrap_ip
+                #
+                successor_ip = self.bootstrap_ip
+            url = f"http://{successor_ip}:{successor_port}/delete"
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding delete request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
+                response = requests.post(url, json={"key": key})
+                return response.json()
+            except Exception as e:
+                return {
+                    "result": False,
+                    "error": f"Error forwarding delete to {self.successor_ip}:{self.successor_port} -> {e}",
+                    "ip": self.ip
+                }
 
     def join(self, bootstrap_ip, bootstrap_port):
         # Ο κόμβος που δεν είναι bootstrap καλεί αυτή τη μέθοδο για να εισέλθει στο δίκτυο.
@@ -143,17 +177,32 @@ class Node:
         try:
             response = requests.post(url, json=payload)
             if response.status_code == 200:
-                data = response.json()
-                # Ενημέρωση του successor και του predecessor βάσει της απάντησης
-                self.successor = data.get('successor', None)
-                self.predecessor = data.get('predecessor', None)
+                # If node joined the ring update the successor and predecessor pointers
+                self.pull_neighbors(bootstrap_ip, bootstrap_port)
                 return True
             else:
                 return False
         except Exception as e:
             print("Error joining network:", e)
             return False
-
+        
+    def pull_neighbors(self, bootstrap_ip, bootstrap_port):
+            # New method: the node can later pull updated neighbor info from the bootstrap.
+            url = f"http://{bootstrap_ip}:{bootstrap_port}/get_neighbors"
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    data = response.json()
+                    self.update_neighbors(data.get('successor'), data.get('predecessor'))
+                    print(f"[{self.ip}:{self.port}] Neighbors updated via pull: successor={self.successor}, predecessor={self.predecessor}")
+                    return True
+                else:
+                    print(f"Pull neighbors failed: {response.text}")
+                    return False
+            except Exception as e:
+                print("Error pulling neighbors:", e)
+                return False
+            
     def depart(self):
         """
         Στην απλή «global ring» λογική, απλώς καλούμε τον bootstrap

@@ -1,6 +1,7 @@
 # routes/data.py
 from flask import Blueprint, request, jsonify, current_app
 import hashlib
+import requests
 
 data_bp = Blueprint('data', __name__)
 
@@ -75,8 +76,10 @@ def delete():
     node = current_app.config['NODE']
     data = request.get_json()
     key = data.get("key")
-    result = node.delete(key)
-    if result:
-        return jsonify({"result": True}), 200
+    # node.delete(key) returns a dict with "result", "ip", etc.
+    response_data = node.delete(key)
+
+    if response_data.get("result") is True:
+        return jsonify(response_data), 200
     else:
-        return jsonify({"error": "Το key δεν βρέθηκε"}), 404
+        return jsonify(response_data), 404
