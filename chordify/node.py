@@ -75,30 +75,20 @@ class Node:
 
     def query(self, key: str) -> str:
         key_hash = self.compute_hash(key)
-        print(f"[{self.ip}:{self.port}] Query for key '{key}' (hash: {key_hash})")
-
         if self.is_responsible(key_hash):
-            print(f"[{self.ip}:{self.port}] Responsible for key '{key}', returning result.")
             return self.data_store.get(key, None)
-        
-        successor_ip = self.successor.get("ip")
-        successor_port = self.successor.get("port")
-
-        if not successor_ip or not successor_port:
-            print(f"[{self.ip}:{self.port}] No valid successor! Cannot forward query.")
-            return None
-
-        url = f"http://{successor_ip}:{successor_port}/query?key={key}"
-        print(f"[{self.ip}:{self.port}] Forwarding query to {successor_ip}:{successor_port}")
-
-        try:
-            response = requests.get(url)
-            response_data = response.json()
-            print(f"[{self.ip}:{self.port}] Received response: {response_data}")
-            return response_data.get("result", None)
-        except Exception as e:
-            print(f"[{self.ip}:{self.port}] Error forwarding query: {e}")
-            return None
+        else:
+            successor_ip = self.successor.get("ip")
+            successor_port = self.successor.get("port")
+            if successor_ip == "0.0.0.0":
+                successor_ip = self.bootstrap_ip
+            url = f"http://{successor_ip}:{successor_port}/query?key={key}"
+            try:
+                response = requests.get(url)
+                return response.json().get("result", None)
+            except Exception as e:
+                print(f"Error forwarding query request to {successor_ip}:{successor_port}: {e}")
+                return None
         
     def query_all(self, origin: str = None, aggregated_data: dict = None) -> dict:
         """
