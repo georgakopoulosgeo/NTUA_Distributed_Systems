@@ -1,6 +1,7 @@
 # routes/data.py
 from flask import Blueprint, request, jsonify, current_app
 import hashlib
+import requests
 
 data_bp = Blueprint('data', __name__)
 
