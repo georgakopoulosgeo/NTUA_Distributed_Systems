@@ -73,12 +73,69 @@ class Node:
                 print(f"Σφάλμα κατά την προώθηση στο {successor_ip}:{successor_port}: {e}")
                 return False
 
-    def query(self, key):
-        # Αναζήτηση ενός key στο τοπικό data_store.
-        # Επιστρέφει το value αν βρεθεί, αλλιώς None.
-        if key in self.data_store:
-            return self.data_store[key]
-        return None
+    def query(self, key: str) -> str:
+        key_hash = self.compute_hash(key)
+        print(f"[{self.ip}:{self.port}] Query for key '{key}' (hash: {key_hash})")
+
+        if self.is_responsible(key_hash):
+            print(f"[{self.ip}:{self.port}] Responsible for key '{key}', returning result.")
+            return self.data_store.get(key, None)
+        
+        successor_ip = self.successor.get("ip")
+        successor_port = self.successor.get("port")
+
+        if not successor_ip or not successor_port:
+            print(f"[{self.ip}:{self.port}] No valid successor! Cannot forward query.")
+            return None
+
+        url = f"http://{successor_ip}:{successor_port}/query?key={key}"
+        print(f"[{self.ip}:{self.port}] Forwarding query to {successor_ip}:{successor_port}")
+
+        try:
+            response = requests.get(url)
+            response_data = response.json()
+            print(f"[{self.ip}:{self.port}] Received response: {response_data}")
+            return response_data.get("result", None)
+        except Exception as e:
+            print(f"[{self.ip}:{self.port}] Error forwarding query: {e}")
+            return None
+        
+    def query_all(self, origin: str = None, aggregated_data: dict = None) -> dict:
+        """
+        Επεκτάσιμη λειτουργία για το query "*" που συγκεντρώνει όλα τα <key, value> ζεύγη.
+        Χρησιμοποιούμε το origin για να γνωρίζουμε πότε έχει ολοκληρωθεί ο κύκλος.
+        """
+        # Αν δεν έχει δοθεί origin, ο τρέχων κόμβος είναι ο εκκινητής
+        if origin is None:
+            origin = f"{self.ip}:{self.port}"
+        # Αρχικοποίηση του aggregated_data
+        if aggregated_data is None:
+            aggregated_data = {}
+
+        # Προσθέτουμε τα τοπικά δεδομένα
+        aggregated_data.update(self.data_store)
+        
+        successor_ip = self.successor.get("ip")
+        successor_port = self.successor.get("port")
+        successor_identifier = f"{successor_ip}:{successor_port}"
+        
+        # Εάν ο επόμενος κόμβος είναι ο κόμβος εκκίνησης, τότε ο κύκλος έχει ολοκληρωθεί
+        if successor_identifier == origin:
+            return aggregated_data
+        else:
+            url = f"http://{successor_ip}:{successor_port}/query_all"
+            payload = {
+                "origin": origin,
+                "aggregated_data": aggregated_data
+            }
+            try:
+                print(f"[{self.ip}:{self.port}] Προώθηση του wildcard query '*' στον successor {successor_identifier}.")
+                response = requests.post(url, json=payload)
+                # Αναμένουμε ότι η απάντηση θα έχει το πλήρες aggregated_data
+                return response.json().get("value", aggregated_data)
+            except Exception as e:
+                print(f"Σφάλμα κατά την προώθηση του wildcard query στο {successor_identifier}: {e}")
+                return aggregated_data
 
     def delete(self, key):
         # Διαγραφή ενός key από το data_store.
