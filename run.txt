@@ -7,7 +7,7 @@ curl -X POST http://127.0.0.1:8001/insert -H "Content-Type: application/json" -d
 
 curl -X GET "http://127.0.0.1:8001/query?key=song1"
 
-//// On Windows, instead of -X POST, GET 
+//// On Windows, instead of -X POST, GET
 
 Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
   -Method Post `
@@ -39,9 +39,14 @@ curl -X GET http://127.0.0.1:8001/overlay
 
 curl -X POST http://localhost:8002/depart
 
- - Extra join δεν εχω βρει πως να κανεις αλλα δεν νομιζω οτι χρειαζεται κιολας 
+ - Extra join δεν εχω βρει πως να κανεις αλλα δεν νομιζω οτι χρειαζεται κιολας
  - Δηλαδή σίγουρα καλο ειναι να ξερεις πως γίνεται, αλλά για αυτή την στιγμή είμαστε καλα
  - Μαλλον με καποιο docker run ---name node5 κατι τετοιο
+
+ //queries
+ Invoke-WebRequest -Uri "http://127.0.0.1:8001/query?key=song1" -Method Get
+ $response = Invoke-WebRequest -Uri "http://127.0.0.1:8001/query?key=song1"
+  $response.Content | ConvertFrom-Json | ConvertTo-Json -Depth 10
 
 //////////////
 nodes

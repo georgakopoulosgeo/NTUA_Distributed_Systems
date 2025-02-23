@@ -11,22 +11,58 @@ def compute_hash(key):
 
 @data_bp.route("/insert", methods=["POST"])
 def insert():
+    '''
+    When a client calls a node’s /insert endpoint (with no "origin" field in the JSON), that node (the “origin node”) will either 
+    handle the insert itself (if it is responsible for that key) or forward it around the ring. Then, once the responsible node actually 
+    inserts the key, it sends a callback directly back to the origin node, so that the origin node can finally return the final result to the client.
+    '''
     node = current_app.config["NODE"]
     data = request.get_json()
     key = data.get("key")
     value = data.get("value")
+    origin = data.get("origin")  # might be None or might exist
 
-    # Call the node.insert() method which now returns a dictionary
-    response = node.insert(key, value)
-
-    # You can decide whether to return 200 or 4xx based on "result"
-    if response.get("result") is True:
-        return jsonify(response), 200
+    response = node.insert(key, value, origin)
+    
+    # The Origin Node Must Block (or otherwise wait) for the final callback
+    if origin is None:
+        # Origin Node sets up a “pending request” so that it can block the HTTP response until the final result arrives from the responsible node.
+        req_id = list(node.pending_requests.keys())[-1]
+        pending = node.pending_requests[req_id]
+        if pending["event"].wait(timeout=3):  # 3-second wait
+            # The final result should be in the pending dict
+            final_result = pending["result"]
+            # cleanup
+            del node.pending_requests[req_id]
+            return jsonify(final_result), 200
+        else:
+            # Timeout
+            del node.pending_requests[req_id]
+            return jsonify({"result": False, "error": "Timeout waiting for final node callback"}), 504
     else:
-        # e.g. if there's an error or the key was not inserted
-        return jsonify(response), 404
+        # If not the origin node, return the response to the predecessor node
+        return jsonify(response), 200
 
-# some pheudocode by me
+
+@data_bp.route("/insert_response", methods=["POST"])
+def insert_response():
+    # This is the callback endpoint that the final (responsible) node calls
+    # to deliver the final result to the origin node.
+    node = current_app.config["NODE"]
+    data = request.get_json()
+    req_id = data.get("request_id")
+    final_result = data.get("final_result")
+    print(f"Received insert response for request_id {req_id}")
+
+    # if the request_id exists in the pending_requests dict of the node instance then set the result and event
+    if req_id in node.pending_requests:
+        node.pending_requests[req_id]["result"] = final_result
+        node.pending_requests[req_id]["event"].set()
+        return jsonify({"result": True, "message": "Callback received."}), 200
+    else:
+        return jsonify({"result": False, "error": "Unknown request_id"}), 404
+
+
 @data_bp.route("/query", methods=["GET"])
 def query():
     node = current_app.config['NODE']
@@ -34,14 +70,15 @@ def query():
     
     if not key:
         return jsonify({"error": "Missing key parameter"}), 400
-    print(f"Node {node.ip}:{node.port} querying for key '{key}', successor: {node.successor}")
-    result = node.query(key)
 
     if key == "*":  # Wildcard query
         print(f"Node {node.ip}:{node.port} querying for ALL keys (wildcard '*').")
-        all_songs = node.query_wildcard()
+        all_songs = node.query_wildcard(origin=f"{node.ip}:{node.port}")  # Pass origin to stop looping
         return jsonify({"all_songs": all_songs}), 200
-    
+
+    print(f"Node {node.ip}:{node.port} querying for key '{key}', successor: {node.successor}")
+    result = node.query(key)
+
     if result is not None:
         key_hash = compute_hash(key)
         print(f"[{node.ip}:{node.port}] Query request for key '{key}' (hash: {key_hash}).")
@@ -49,37 +86,6 @@ def query():
     else:
         return jsonify({"error": "Key - Song not found"}), 404
     
-@data_bp.route("/query_all", methods=["POST"])
-def query_all():
-    node = current_app.config['NODE']
-    data = request.get_json()
-    origin = data.get("origin")
-    aggregated_data = data.get("aggregated_data", {})
-
-    return forward_query_all(node, origin, aggregated_data)
-
-def forward_query_all(node, origin, aggregated_data):
-    aggregated_data.update(node.data_store)
-
-    successor_ip = node.successor.get("ip")
-    successor_port = node.successor.get("port")
-    successor_identifier = f"{successor_ip}:{successor_port}"
-
-    if successor_identifier == origin:
-        return jsonify({"value": aggregated_data}), 200
-
-    url = f"http://{successor_ip}:{successor_port}/query_all"
-    payload = {"origin": origin, "aggregated_data": aggregated_data}
-
-    try:
-        print(f"[{node.ip}:{node.port}] Forwarding wildcard query '*' to {successor_identifier}.")
-        response = requests.post(url, json=payload)
-        return response.json()
-    except Exception as e:
-        return jsonify({"error": str(e), "value": aggregated_data}), 500
-
-    
-
 
 @data_bp.route("/delete", methods=["POST"])
 def delete():

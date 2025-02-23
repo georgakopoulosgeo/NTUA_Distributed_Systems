@@ -1,5 +1,7 @@
 import hashlib
 import requests
+import threading
+import uuid
 
 class Node:
     def __init__(self, ip, port, is_bootstrap=False):
@@ -15,6 +17,7 @@ class Node:
         self.successor = {}  # Πληροφορίες για τον επόμενο κόμβο στο δακτύλιο
         self.predecessor = {} # Πληροφορίες για τον προηγούμενο κόμβο (αν χρειαστεί)
         self.data_store = {}   # Αποθήκη για τα key-value δεδομένα
+        self.pending_requests = {} # Κρατάει τα αιτήματα που περιμένουν απάντηση
 
 
     def compute_hash(self, key):
@@ -39,94 +42,138 @@ class Node:
 
 
 
-    def insert(self, key: str, value: str) -> bool:
-        # Implement the insert operation for a key-value pair
+    def insert(self, key: str, value: str, origin: dict = None):
+        """
+        If origin is None, we treat this node as the 'origin'.
+        If not None, we forward or respond with a callback.
+        """
+        # If there's no origin, this node is the origin node
+        if origin is None:
+            request_id = str(uuid.uuid4())
+            event = threading.Event()
+            self.pending_requests[request_id] = {"event": event, "result": None}
+            origin = {
+                "ip": self.ip,
+                "port": self.port,
+                "request_id": request_id
+            }
+        # Now do normal Chord logic
         key_hash = self.compute_hash(key)
-        # print(f"[{self.ip}:{self.port}] Αίτημα insert για το key '{key}' (hash: {key_hash}).")
+
         if self.is_responsible(key_hash):
+            # Responsible node -> do the actual insert
             if key in self.data_store:
                 self.data_store[key] += f" | {value}"
-                print(f"[{self.ip}:{self.port}] Ενημερώθηκε το key '{key}' στον κόμβο {self.ip} (hash: {key_hash}).")
-                return {
-                    "result": True,
-                    "message": f"Key '{key}' inserted to node {self.ip} (hash: {key_hash}).",
-                    "data_store": self.data_store,
-                    "ip": self.ip
-                }
+                msg = f"Key '{key}' updated at node {self.ip}."
             else:
-                # If the key does not exist, create a new entry
                 self.data_store[key] = value
-                print(f"[{self.ip}:{self.port}] Εισαγωγή του key '{key}' στον κόμβο {self.ip} (hash: {key_hash}).")
-                return {
-                    "result": True,
-                    "message": f"Key '{key}' updated on node {self.ip} (hash: {key_hash}).",
-                    "data_store": self.data_store,
-                    "ip": self.ip
-                }
-        else:
-            # Forward the request to the successor
-            #{
-            #    "id": entry["id"],
-            #    "ip": entry["ip"],
-            #    "port": entry["port"]
-            #}
-            successor_ip = self.successor.get("ip")
-            successor_port = self.successor.get("port")
-            # If the successor is the bootstrap, we need to use the bootstrap IP
-            if successor_ip == "0.0.0.0":
-                successor_ip = self.bootstrap_ip
-            url = f"http://{successor_ip}:{successor_port}/insert"
-            try:
-                print(f"[{self.ip}:{self.port}] Προώθηση του key '{key}' (hash: {key_hash}) στον successor {successor_ip}:{successor_port}.")
-                response = requests.post(url, json={"key": key, "value": value})
-                # Return the response from the successor
-                return response.json()
-            except Exception as e:
-                return {
-                "result": False,
-                "error": f"Forwarding insert request failed: {e}"
-              }
+                msg = f"Key '{key}' inserted at node {self.ip}."
 
-    def query(self, key: str) -> str:
-        key_hash = self.compute_hash(key)
-        if self.is_responsible(key_hash):
-            return self.data_store.get(key, None)
+            final_result = {
+                "result": True,
+                "message": msg,
+                "ip": self.ip,
+                "data_store": self.data_store
+            }
+
+            # If I'm not the origin, callback to the origin with final_result
+            if not (origin["ip"] == self.ip and origin["port"] == self.port):
+                print(f"Insert processed; callback sent to origin {origin['ip']}:{origin['port']}")
+                callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
+                try:
+                    requests.post(callback_url, json={
+                        "request_id": origin["request_id"],
+                        "final_result": final_result
+                    })
+                except Exception as e:
+                    print(f"Error sending callback: {e}")
+
+                # Return something minimal, because the real result goes via callback
+                return {"result": True, "message": "Insert processed; callback sent to origin."}
+            else:
+                # If I AM the origin, set the final result in pending_requests
+                req_id = origin["request_id"]
+                if req_id in self.pending_requests:
+                    self.pending_requests[req_id]["result"] = final_result
+                    self.pending_requests[req_id]["event"].set()
+                return final_result
         else:
-            successor_ip = self.successor.get("ip")
-            successor_port = self.successor.get("port")
-            if successor_ip == "0.0.0.0":
-                successor_ip = self.bootstrap_ip
-            url = f"http://{successor_ip}:{successor_port}/query?key={key}"
+            # Not responsible -> forward
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/insert"
+            payload = {
+                "key": key,
+                "value": value,
+                "origin": origin
+            }
             try:
-                response = requests.get(url)
-                return response.json().get("result", None)
+                print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
+                requests.post(url, json=payload)
             except Exception as e:
-                print(f"Error forwarding query request to {successor_ip}:{successor_port}: {e}")
-                return None
+                return {"result": False, "error": f"Forwarding failed: {e}"}
+            return {"result": True, "message": "Insert forwarded."}
         
-    def query_wildcard(self, visited=None):
+    def query(self, key: str) -> dict:
+        key_hash = self.compute_hash(key)
+
+        # If this node is responsible, return only the final response
+        if self.is_responsible(key_hash):
+            return {
+                "ip": self.ip,
+                "key": key,
+                "result": self.data_store.get(key, None)
+            }
+
+        # Forward the request to the successor
+        successor_ip = self.successor.get("ip")
+        successor_port = self.successor.get("port")
+
+        if successor_ip == "0.0.0.0":
+            successor_ip = self.bootstrap_ip  # Use bootstrap if necessary
+
+        url = f"http://{successor_ip}:{successor_port}/query?key={key}"
+
+        try:
+            response = requests.get(url)
+            response_data = response.json()
+            
+            # Instead of wrapping the response in another layer, return it as is
+            return response_data if isinstance(response_data, dict) else {"error": "Invalid response format"}
+
+        except Exception as e:
+            return {
+                "key": key,
+                "result": None,
+                "ip": None,
+                "error": f"Forwarding query request failed: {e}"
+            }
+
+           
+    def query_wildcard(self, origin=None, collected_data=None):
         """
         Handles wildcard '*' queries by aggregating all songs from the DHT ring.
+        Prevents infinite loops by stopping when the query reaches the origin node again.
         """
-        if visited is None:
-            visited = set()
+        if collected_data is None:
+            collected_data = {}  # Initialize only once
 
-        origin = f"{self.ip}:{self.port}"
+        if origin is None:
+            origin = f"{self.ip}:{self.port}"  # Set origin only for the first node
 
-        # If we've already visited this node, we've completed the loop
-        if origin in visited:
-            return self.data_store
+        print(f"[{self.ip}:{self.port}] Collecting all keys. Origin: {origin}")
 
-        visited.add(origin)  # Mark this node as visited
-        all_songs = self.data_store.copy()  # Start with local data
+        # Merge this node's data into the collected dictionary
+        collected_data.update(self.data_store)
 
         successor_ip = self.successor.get("ip")
         successor_port = self.successor.get("port")
         successor_identifier = f"{successor_ip}:{successor_port}"
 
-        # Prevent infinite looping by checking if we reached the original node
-        if successor_identifier in visited:
-            return all_songs
+        # Stop forwarding when reaching the original requester
+        if successor_identifier == origin:
+            print(f"[{self.ip}:{self.port}] Wildcard query completed, returning collected data.")
+            return collected_data  # Stop recursion here
 
         # Forward query to the next node in the ring
         url = f"http://{successor_ip}:{successor_port}/query?key=*"
@@ -135,12 +182,12 @@ class Node:
             response = requests.get(url)
             if response.status_code == 200:
                 successor_data = response.json().get("all_songs", {})
-                all_songs.update(successor_data)  # Merge data from successor
+                collected_data.update(successor_data)  # Merge data from successor
         except Exception as e:
             print(f"Error forwarding wildcard query to {successor_ip}:{successor_port}: {e}")
 
-        return all_songs
-
+        return collected_data
+    
     def delete(self, key):
         # Check if i am responsible for the key
         key_hash = self.compute_hash(key)
