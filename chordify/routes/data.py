@@ -11,14 +11,20 @@ def compute_hash(key):
 
 @data_bp.route("/insert", methods=["POST"])
 def insert():
-    node = current_app.config['NODE']
+    node = current_app.config["NODE"]
     data = request.get_json()
     key = data.get("key")
     value = data.get("value")
-    result = node.insert(key, value)
-    key_hash = compute_hash(key)
-    print(f"[{node.ip}:{node.port}] Αίτημα insert για το key '{key}' (hash: {key_hash}).")
-    return jsonify({"result": result, "data_store": node.data_store}), 200
+
+    # Call the node.insert() method which now returns a dictionary
+    response = node.insert(key, value)
+
+    # You can decide whether to return 200 or 4xx based on "result"
+    if response.get("result") is True:
+        return jsonify(response), 200
+    else:
+        # e.g. if there's an error or the key was not inserted
+        return jsonify(response), 404
 
 # some pheudocode by me
 @data_bp.route("/query", methods=["GET"])

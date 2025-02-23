@@ -28,10 +28,10 @@ class Node:
         self.predecessor = predecessor
 
     def is_responsible(self, key_hash: int) -> bool:
-        # Έλεγχος αν ο κόμβος είναι υπεύθυνος για ένα key με βάση το hash του.
+        # Check if the node is responsible for a given key hash
         if self.is_bootstrap:
             return True
-        # Έλεγχος αν το key_hash είναι μέσα στο διάστημα (predecessor, self]
+        # Check if the key hash is between the predecessor and the node id
         if self.predecessor["id"] < self.id:
             return self.predecessor["id"] < key_hash <= self.id
         else:
@@ -40,19 +40,31 @@ class Node:
 
 
     def insert(self, key: str, value: str) -> bool:
-        # Υλοποιεί το insert του <key, value> ζεύγους σύμφωνα με τον Chord,
+        # Implement the insert operation for a key-value pair
         key_hash = self.compute_hash(key)
         # print(f"[{self.ip}:{self.port}] Αίτημα insert για το key '{key}' (hash: {key_hash}).")
         if self.is_responsible(key_hash):
-            # Εάν το key υπάρχει ήδη, ενημέρωσε το value (concat)
             if key in self.data_store:
-                self.data_store[key] += f";{value}"
+                self.data_store[key] += f" | {value}"
+                print(f"[{self.ip}:{self.port}] Ενημερώθηκε το key '{key}' στον κόμβο {self.ip} (hash: {key_hash}).")
+                return {
+                    "result": True,
+                    "message": f"Key '{key}' inserted to node {self.ip} (hash: {key_hash}).",
+                    "data_store": self.data_store,
+                    "ip": self.ip
+                }
             else:
+                # If the key does not exist, create a new entry
                 self.data_store[key] = value
-            print(f"[{self.ip}:{self.port}] Αποθήκευσε το key '{key}' (hash: {key_hash}) τοπικά.")
-            return True
+                print(f"[{self.ip}:{self.port}] Εισαγωγή του key '{key}' στον κόμβο {self.ip} (hash: {key_hash}).")
+                return {
+                    "result": True,
+                    "message": f"Key '{key}' updated on node {self.ip} (hash: {key_hash}).",
+                    "data_store": self.data_store,
+                    "ip": self.ip
+                }
         else:
-            # Προώθησε το αίτημα στον successor.
+            # Forward the request to the successor
             #{
             #    "id": entry["id"],
             #    "ip": entry["ip"],
@@ -60,18 +72,20 @@ class Node:
             #}
             successor_ip = self.successor.get("ip")
             successor_port = self.successor.get("port")
-            # Αν η ip του successor είναι 0.0.0.0 τοτε χρησιμοοποίησε την ip του bootstrap
+            # If the successor is the bootstrap, we need to use the bootstrap IP
             if successor_ip == "0.0.0.0":
                 successor_ip = self.bootstrap_ip
             url = f"http://{successor_ip}:{successor_port}/insert"
             try:
                 print(f"[{self.ip}:{self.port}] Προώθηση του key '{key}' (hash: {key_hash}) στον successor {successor_ip}:{successor_port}.")
                 response = requests.post(url, json={"key": key, "value": value})
-                # Αναμενόμενη επιστροφή από τον κόμβο-στόχο
-                return response.json().get("result", False)
+                # Return the response from the successor
+                return response.json()
             except Exception as e:
-                print(f"Σφάλμα κατά την προώθηση στο {successor_ip}:{successor_port}: {e}")
-                return False
+                return {
+                "result": False,
+                "error": f"Forwarding insert request failed: {e}"
+              }
 
     def query(self, key: str) -> str:
         key_hash = self.compute_hash(key)
@@ -178,7 +192,10 @@ class Node:
             response = requests.post(url, json=payload)
             if response.status_code == 200:
                 # If node joined the ring update the successor and predecessor pointers
-                self.pull_neighbors(bootstrap_ip, bootstrap_port)
+                data = response.json()
+                self.successor = data.get('successor')
+                self.predecessor = data.get('predecessor')
+                print(f"[{self.ip}:{self.port}] Joined network: successor={self.successor}, predecessor={self.predecessor}")
                 return True
             else:
                 return False
@@ -186,9 +203,9 @@ class Node:
             print("Error joining network:", e)
             return False
         
-    def pull_neighbors(self, bootstrap_ip, bootstrap_port):
+    def pull_neighbors(self):
             # New method: the node can later pull updated neighbor info from the bootstrap.
-            url = f"http://{bootstrap_ip}:{bootstrap_port}/get_neighbors"
+            url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/get_neighbors"
             try:
                 response = requests.get(url)
                 if response.status_code == 200:

@@ -19,35 +19,78 @@ def join():
     }
     print(f"[Bootstrap] Node joining: {new_node_info}")
 
-    # Here you can call a shared function to update the ring (which might be refactored into a separate module)
-    # For simplicity, assume you have a global 'ring' managed by the bootstrap node.
+    # Fetch the current ring from app.config
     ring = current_app.config.get('RING', [])
+
+    # Add the new node to the ring if it's not already there
     if not any(n['id'] == new_node_info['id'] for n in ring):
         ring.append(new_node_info)
-    # (Re)calculate pointers here...
-    # Broadcast new pointers, etc.
     ring.sort(key=lambda n: n["id"])
     n = len(ring)
-    for i in range(n):
-        successor = ring[(i + 1) % n]
-        predecessor = ring[(i - 1) % n]
-        ring[i]["successor"] = {"ip": successor["ip"], "port": successor["port"], "id": successor["id"]}
-        ring[i]["predecessor"] = {"ip": predecessor["ip"], "port": predecessor["port"], "id": predecessor["id"]}
 
-    
-    # Write ring back to app.config
+    # Find the index of the new node in the sorted ring
+    new_index = ring.index(new_node_info)
+    # Identify the successor and predecessor of the new node
+    pred_index = (new_index - 1) % n
+    succ_index = (new_index + 1) % n
+
+    predecessor_info = ring[pred_index]
+    successor_info = ring[succ_index]
+
+    # 1) Update the new node's pointers in the ring list
+    ring[new_index]["predecessor"] = {
+        "ip": predecessor_info["ip"],
+        "port": predecessor_info["port"],
+        "id": predecessor_info["id"]
+    }
+    ring[new_index]["successor"] = {
+        "ip": successor_info["ip"],
+        "port": successor_info["port"],
+        "id": successor_info["id"]
+    }
+
+    # 2) Update the predecessor so its successor is the new node
+    ring[pred_index]["successor"] = {
+        "ip": new_node_info["ip"],
+        "port": new_node_info["port"],
+        "id": new_node_info["id"]
+    }
+    try:
+        url = f"http://{predecessor_info['ip']}:{predecessor_info['port']}/update_neighbors"
+        payload = {
+            "successor": ring[pred_index]["successor"],
+            "predecessor": predecessor_info.get("predecessor", {})
+        }
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"[Bootstrap] Failed to update predecessor {predecessor_info}: {e}")
+
+    # 3) Update the successor so its predecessor is the new node
+    ring[succ_index]["predecessor"] = {
+        "ip": new_node_info["ip"],
+        "port": new_node_info["port"],
+        "id": new_node_info["id"]
+    }
+    try:
+        url = f"http://{successor_info['ip']}:{successor_info['port']}/update_neighbors"
+        payload = {
+            "successor": successor_info.get("successor", {}),
+            "predecessor": ring[succ_index]["predecessor"]
+        }
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"[Bootstrap] Failed to update successor {successor_info}: {e}")
+
+    # Store the updated ring
     current_app.config['RING'] = ring
 
-    # Finally, return the pointers for the joining node
-    for entry in ring:
-        if entry["id"] == new_node_info["id"]:
-            return jsonify({
-                "message": "Επιτυχής ένταξη",
-                "successor": entry.get("successor"),
-                "predecessor": entry.get("predecessor"),
-                "ring": ring  # Optional debugging info
-            }), 200
-    return jsonify({"error": "Ο νέος κόμβος δεν βρέθηκε στο ring"}), 500
+    # Return the new node's own successor/predecessor in the response
+    return jsonify({
+        "message": "Node joined successfully (minimal push)",
+        "successor": ring[new_index]["successor"],
+        "predecessor": ring[new_index]["predecessor"],
+        "ring": ring  # For debugging
+    }), 200
 
 @join_bp.route("/update_neighbors", methods=["POST"])
 def update_neighbors():
