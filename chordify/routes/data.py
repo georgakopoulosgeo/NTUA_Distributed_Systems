@@ -30,6 +30,11 @@ def query():
         return jsonify({"error": "Missing key parameter"}), 400
     print(f"Node {node.ip}:{node.port} querying for key '{key}', successor: {node.successor}")
     result = node.query(key)
+
+    if key == "*":  # Wildcard query
+        print(f"Node {node.ip}:{node.port} querying for ALL keys (wildcard '*').")
+        all_songs = node.query_wildcard()
+        return jsonify({"all_songs": all_songs}), 200
     
     if result is not None:
         key_hash = compute_hash(key)
@@ -44,29 +49,28 @@ def query_all():
     data = request.get_json()
     origin = data.get("origin")
     aggregated_data = data.get("aggregated_data", {})
-    
-    # Ενημέρωση με τα τοπικά δεδομένα του κόμβου
+
+    return forward_query_all(node, origin, aggregated_data)
+
+def forward_query_all(node, origin, aggregated_data):
     aggregated_data.update(node.data_store)
-    
+
     successor_ip = node.successor.get("ip")
     successor_port = node.successor.get("port")
     successor_identifier = f"{successor_ip}:{successor_port}"
-    
-    # Ελέγχουμε αν ο επόμενος κόμβος είναι ο κόμβος εκκίνησης
+
     if successor_identifier == origin:
         return jsonify({"value": aggregated_data}), 200
-    else:
-        url = f"http://{successor_ip}:{successor_port}/query_all"
-        payload = {
-            "origin": origin,
-            "aggregated_data": aggregated_data
-        }
-        try:
-            print(f"[{node.ip}:{node.port}] Προώθηση wildcard query '*' στον successor {successor_identifier}.")
-            response = requests.get(url, json=payload)
-            return response.json()
-        except Exception as e:
-            return jsonify({"error": str(e), "value": aggregated_data}), 500
+
+    url = f"http://{successor_ip}:{successor_port}/query_all"
+    payload = {"origin": origin, "aggregated_data": aggregated_data}
+
+    try:
+        print(f"[{node.ip}:{node.port}] Forwarding wildcard query '*' to {successor_identifier}.")
+        response = requests.post(url, json=payload)
+        return response.json()
+    except Exception as e:
+        return jsonify({"error": str(e), "value": aggregated_data}), 500
 
     
 

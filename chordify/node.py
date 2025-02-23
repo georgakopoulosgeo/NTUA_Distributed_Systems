@@ -90,42 +90,42 @@ class Node:
                 print(f"Error forwarding query request to {successor_ip}:{successor_port}: {e}")
                 return None
         
-    def query_all(self, origin: str = None, aggregated_data: dict = None) -> dict:
+    def query_wildcard(self, visited=None):
         """
-        Επεκτάσιμη λειτουργία για το query "*" που συγκεντρώνει όλα τα <key, value> ζεύγη.
-        Χρησιμοποιούμε το origin για να γνωρίζουμε πότε έχει ολοκληρωθεί ο κύκλος.
+        Handles wildcard '*' queries by aggregating all songs from the DHT ring.
         """
-        # Αν δεν έχει δοθεί origin, ο τρέχων κόμβος είναι ο εκκινητής
-        if origin is None:
-            origin = f"{self.ip}:{self.port}"
-        # Αρχικοποίηση του aggregated_data
-        if aggregated_data is None:
-            aggregated_data = {}
+        if visited is None:
+            visited = set()
 
-        # Προσθέτουμε τα τοπικά δεδομένα
-        aggregated_data.update(self.data_store)
-        
+        origin = f"{self.ip}:{self.port}"
+
+        # If we've already visited this node, we've completed the loop
+        if origin in visited:
+            return self.data_store
+
+        visited.add(origin)  # Mark this node as visited
+        all_songs = self.data_store.copy()  # Start with local data
+
         successor_ip = self.successor.get("ip")
         successor_port = self.successor.get("port")
         successor_identifier = f"{successor_ip}:{successor_port}"
-        
-        # Εάν ο επόμενος κόμβος είναι ο κόμβος εκκίνησης, τότε ο κύκλος έχει ολοκληρωθεί
-        if successor_identifier == origin:
-            return aggregated_data
-        else:
-            url = f"http://{successor_ip}:{successor_port}/query_all"
-            payload = {
-                "origin": origin,
-                "aggregated_data": aggregated_data
-            }
-            try:
-                print(f"[{self.ip}:{self.port}] Προώθηση του wildcard query '*' στον successor {successor_identifier}.")
-                response = requests.post(url, json=payload)
-                # Αναμένουμε ότι η απάντηση θα έχει το πλήρες aggregated_data
-                return response.json().get("value", aggregated_data)
-            except Exception as e:
-                print(f"Σφάλμα κατά την προώθηση του wildcard query στο {successor_identifier}: {e}")
-                return aggregated_data
+
+        # Prevent infinite looping by checking if we reached the original node
+        if successor_identifier in visited:
+            return all_songs
+
+        # Forward query to the next node in the ring
+        url = f"http://{successor_ip}:{successor_port}/query?key=*"
+        try:
+            print(f"[{self.ip}:{self.port}] Forwarding wildcard query '*' to {successor_identifier}.")
+            response = requests.get(url)
+            if response.status_code == 200:
+                successor_data = response.json().get("all_songs", {})
+                all_songs.update(successor_data)  # Merge data from successor
+        except Exception as e:
+            print(f"Error forwarding wildcard query to {successor_ip}:{successor_port}: {e}")
+
+        return all_songs
 
     def delete(self, key):
         # Check if i am responsible for the key
