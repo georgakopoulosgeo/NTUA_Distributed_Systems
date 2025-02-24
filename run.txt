@@ -72,6 +72,11 @@ nodes
 897157909036590648573699943635484619774617861767 - yolo
 
 /// insert / query / delete
-curl -X POST http://node3:8003/insert \
+curl -X POST http://node3:8000/insert \
      -H "Content-Type: application/json" \
-     -d '{"key": "Imagine", "value": "random"}'
+     -d '{"key": "Imagine"}'
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/delete" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1"}'

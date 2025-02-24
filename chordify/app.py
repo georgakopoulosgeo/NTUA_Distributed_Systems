@@ -22,6 +22,7 @@ app.register_blueprint(data_bp)
 app.register_blueprint(overlay_bp)
 
 if __name__ == '__main__':
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip", type=str, default="127.0.0.1", help="IP διεύθυνση του κόμβου")
     parser.add_argument("-p", "--port", type=int, default=8000, help="Θύρα του κόμβου")
@@ -58,4 +59,4 @@ if __name__ == '__main__':
     # the routes can access it. For example:
     app.config['NODE'] = node
 
-    app.run(host="0.0.0.0", port=args.port, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=args.port, debug=True, use_reloader=False, threaded=True)

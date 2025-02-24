@@ -12,12 +12,14 @@ class Node:
         self.ip = ip
         self.port = port
         self.is_bootstrap = is_bootstrap
-        # Αν ο κόμβος δεν είναι bootstrap, υπολογίζουμε το id από το hash της ip:port.
+         # Αν ο κόμβος δεν είναι bootstrap, υπολογίζουμε το id από το hash της ip:port.
         self.id = 0 if is_bootstrap else self.compute_hash(f"{self.ip}:{self.port}")
         self.successor = {}  # Πληροφορίες για τον επόμενο κόμβο στο δακτύλιο
         self.predecessor = {} # Πληροφορίες για τον προηγούμενο κόμβο (αν χρειαστεί)
         self.data_store = {}   # Αποθήκη για τα key-value δεδομένα
         self.pending_requests = {} # Κρατάει τα αιτήματα που περιμένουν απάντηση
+        self.replica_store = {}  # New: storage for replicated key-value pairs.
+        self.replication_factor = 3  # Default replication factor k=1 (i.e. no extra copies). Set to 3, 5, etc. as needed.
 
 
     def compute_hash(self, key):
@@ -47,21 +49,17 @@ class Node:
         If origin is None, we treat this node as the 'origin'.
         If not None, we forward or respond with a callback.
         """
-        # If there's no origin, this node is the origin node
         if origin is None:
+            # Setup origin info for callback
+            import uuid, threading
             request_id = str(uuid.uuid4())
             event = threading.Event()
             self.pending_requests[request_id] = {"event": event, "result": None}
-            origin = {
-                "ip": self.ip,
-                "port": self.port,
-                "request_id": request_id
-            }
-        # Now do normal Chord logic
-        key_hash = self.compute_hash(key)
+            origin = {"ip": self.ip, "port": self.port, "request_id": request_id}
 
+        key_hash = self.compute_hash(key)
         if self.is_responsible(key_hash):
-            # Responsible node -> do the actual insert
+            # Primary node: insert in own store.
             if key in self.data_store:
                 self.data_store[key] += f" | {value}"
                 msg = f"Key '{key}' updated at node {self.ip}."
@@ -76,37 +74,42 @@ class Node:
                 "data_store": self.data_store
             }
 
-            # If I'm not the origin, callback to the origin with final_result
+            # --- NEW: Initiate replication ---
+            if self.replication_factor > 1:
+                replication_count = self.replication_factor - 1
+                # Note: replicate_insert sends the key-value pair to the next k-1 nodes.
+                self.replicate_insert(key, value, replication_count)
+
+             # If this node is not the original requester, send a callback to notify the origin.
             if not (origin["ip"] == self.ip and origin["port"] == self.port):
                 print(f"Insert processed; callback sent to origin {origin['ip']}:{origin['port']}")
                 callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
                 try:
+                    # Post the final result back to the origin node's insert_response endpoint.
                     requests.post(callback_url, json={
                         "request_id": origin["request_id"],
                         "final_result": final_result
                     })
                 except Exception as e:
                     print(f"Error sending callback: {e}")
-
-                # Return something minimal, because the real result goes via callback
+                
+                # Return a confirmation that the insert has been processed and callback sent. (Not necessary but okey)
+                
                 return {"result": True, "message": "Insert processed; callback sent to origin."}
             else:
-                # If I AM the origin, set the final result in pending_requests
+                # If this node is the origin update the pending request with the final result and signal the event.
                 req_id = origin["request_id"]
                 if req_id in self.pending_requests:
                     self.pending_requests[req_id]["result"] = final_result
                     self.pending_requests[req_id]["event"].set()
                 return final_result
+
         else:
-            # Not responsible -> forward
+            # If this node is not responsible, forward the insert request to the successor.
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/insert"
-            payload = {
-                "key": key,
-                "value": value,
-                "origin": origin
-            }
+            payload = {"key": key, "value": value, "origin": origin}
             try:
                 print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
                 requests.post(url, json=payload)
@@ -114,40 +117,89 @@ class Node:
                 return {"result": False, "error": f"Forwarding failed: {e}"}
             return {"result": True, "message": "Insert forwarded."}
         
-    def query(self, key: str) -> dict:
-        key_hash = self.compute_hash(key)
 
-        # If this node is responsible, return only the final response
+    def replicate_insert(self, key: str, value: str, replication_count: int):
+        """
+        Handles replication of a key-value pair.
+        Stores the replica locally and forwards the replication message to the successor
+        if more copies are needed.
+        """
+        # Store the replica in replica_store (if already present, append or update as needed)
+        if key in self.replica_store:
+            self.replica_store[key] += f" | {value}"
+        else:
+            self.replica_store[key] = value
+        print(f"[{self.ip}:{self.port}] Stored replica for key '{key}'.")
+
+        if replication_count > 0:
+            # Forward the replication request to the immediate successor.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_insert"
+            payload = {
+                "key": key,
+                "value": value,
+                "replication_count": replication_count - 1
+            }
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
+                requests.post(url, json=payload)
+            except Exception as e:
+                print(f"Error forwarding replication: {e}")
+        
+    def query(self, key: str, origin: dict = None) -> dict:
+        key_hash = self.compute_hash(key)
+        # If no origin is provided, this node is the original requester.
+        if origin is None:
+            request_id = str(uuid.uuid4())
+            event = threading.Event()
+            self.pending_requests[request_id] = {"event": event, "result": None}
+            origin = {
+                "ip": self.ip,
+                "port": self.port,
+                "request_id": request_id
+            }
+        # If this node is responsible for the key...
         if self.is_responsible(key_hash):
-            return {
+            result = {
                 "ip": self.ip,
                 "key": key,
                 "result": self.data_store.get(key, None)
             }
-
-        # Forward the request to the successor
-        successor_ip = self.successor.get("ip")
-        successor_port = self.successor.get("port")
-
-        if successor_ip == "0.0.0.0":
-            successor_ip = self.bootstrap_ip  # Use bootstrap if necessary
-
-        url = f"http://{successor_ip}:{successor_port}/query?key={key}"
-
-        try:
-            response = requests.get(url)
-            response_data = response.json()
-            
-            # Instead of wrapping the response in another layer, return it as is
-            return response_data if isinstance(response_data, dict) else {"error": "Invalid response format"}
-
-        except Exception as e:
-            return {
-                "key": key,
-                "result": None,
-                "ip": None,
-                "error": f"Forwarding query request failed: {e}"
-            }
+            # If this request was forwarded from another node, call back the origin.
+            if not (origin["ip"] == self.ip and origin["port"] == self.port):
+                callback_url = f"http://{origin['ip']}:{origin['port']}/query_response"
+                try:
+                    print(f"[{self.ip}:{self.port}] Query processed; callback sent to origin {origin['ip']}:{origin['port']}")
+                    requests.post(callback_url, json={
+                        "request_id": origin["request_id"],
+                        "final_result": result
+                    })
+                except Exception as e:
+                    print(f"Error sending query callback: {e}")
+                return {"result": True, "message": "Query processed; callback sent to origin."}
+            else:
+                # If this node is the origin, store the final result and signal the waiting event.
+                print(f"[{self.ip}:{self.port}] Query processed; final result stored in pending_requests.")
+                req_id = origin["request_id"]
+                if req_id in self.pending_requests:
+                    self.pending_requests[req_id]["result"] = result
+                    self.pending_requests[req_id]["event"].set()
+                return result
+        else:
+            # Forward the query to the successor, including the origin info.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            if (successor_ip == '0.0.0.0'):
+                successor_ip = self.bootstrap_ip
+                successor_port = self.bootstrap_port
+            url = f"http://{successor_ip}:{successor_port}/query?key={key}&origin_ip={origin['ip']}&origin_port={origin['port']}&request_id={origin['request_id']}"
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
+                requests.get(url)
+            except Exception as e:
+                return {"result": False, "error": f"Forwarding query request failed: {e}"}
+            return {"result": True, "message": "Query forwarded."}
 
            
     def query_wildcard(self, origin=None, collected_data=None):
@@ -188,47 +240,104 @@ class Node:
 
         return collected_data
     
-    def delete(self, key):
-        # Check if i am responsible for the key
+    def delete(self, key: str, origin: dict = None) -> dict:
+        # If origin is None, this node is the original requester
+        if origin is None:
+            request_id = str(uuid.uuid4())
+            event = threading.Event()
+            self.pending_requests[request_id] = {"event": event, "result": None}
+            origin = {
+                "ip": self.ip,
+                "port": self.port,
+                "request_id": request_id
+            }
+
         key_hash = self.compute_hash(key)
         if self.is_responsible(key_hash):
             if key in self.data_store:
                 del self.data_store[key]
-                # Build the final JSON response for a successful delete
-                return {
+                msg = f"Key '{key}' deleted from node {self.ip}."
+                final_result = {
                     "result": True,
-                    "message": f"Key '{key}' deleted from node {self.ip}",
-                    "data_store": self.data_store,
-                    "ip": self.ip
+                    "message": msg,
+                    "ip": self.ip,
+                    "data_store": self.data_store
                 }
             else:
-                # Key not found on this node
-                return {
+                msg = f"Key '{key}' not found on node {self.ip}."
+                final_result = {
                     "result": False,
-                    "error": f"Key '{key}' not found on node {self.ip}",
+                    "error": msg,
                     "ip": self.ip
                 }
+
+            # Initiate replication deletion if replication is enabled.
+            if self.replication_factor > 1:
+                replication_count = self.replication_factor - 1
+                self.replicate_delete(key, replication_count)
+
+            if not (origin["ip"] == self.ip and origin["port"] == self.port):
+                callback_url = f"http://{origin['ip']}:{origin['port']}/delete_response"
+                try:
+                    print(f"[{self.ip}:{self.port}] Delete processed; callback sent to origin {origin['ip']}:{origin['port']}")
+                    requests.post(callback_url, json={
+                        "request_id": origin["request_id"],
+                        "final_result": final_result
+                    })
+                except Exception as e:
+                    print(f"[{self.ip}:{self.port}] Error sending delete callback: {e}")
+
+                return {"result": True, "message": "Delete processed; callback sent to origin."}
+            else:
+                print(f"[{self.ip}:{self.port}] Delete processed; final result stored in pending_requests.")
+                req_id = origin["request_id"]
+                if req_id in self.pending_requests:
+                    self.pending_requests[req_id]["result"] = final_result
+                    self.pending_requests[req_id]["event"].set()
+                return final_result
+
         else:
-            # Forward the request to the successor
             successor_ip = self.successor.get("ip")
             successor_port = self.successor.get("port")
-            if successor_ip == "0.0.0.0": 
-                #
-                # ALERT: In AWS this will not work
-                # We will want: successor_ip = self.bootstrap_ip
-                #
-                successor_ip = self.bootstrap_ip
             url = f"http://{successor_ip}:{successor_port}/delete"
+            payload = {
+                "key": key,
+                "origin": origin
+            }
             try:
                 print(f"[{self.ip}:{self.port}] Forwarding delete request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
-                response = requests.post(url, json={"key": key})
-                return response.json()
+                requests.post(url, json=payload)
             except Exception as e:
-                return {
-                    "result": False,
-                    "error": f"Error forwarding delete to {self.successor_ip}:{self.successor_port} -> {e}",
-                    "ip": self.ip
-                }
+                return {"result": False, "error": f"Forwarding delete failed: {e}"}
+            return {"result": True, "message": "Delete forwarded."}
+
+
+    def replicate_delete(self, key: str, replication_count: int):
+        """
+        Remove the key from the replica_store and, if required,
+        forward the deletion request to the successor.
+        """
+        if key in self.replica_store:
+            del self.replica_store[key]
+            print(f"[{self.ip}:{self.port}] Deleted replica for key '{key}'.")
+        else:
+            print(f"[{self.ip}:{self.port}] No replica for key '{key}' found to delete.")
+
+        # Forward the deletion replication if further replicas need updating.
+        if replication_count > 0:
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+            payload = {
+                "key": key,
+                "replication_count": replication_count - 1
+            }
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding delete replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
+                requests.post(url, json=payload)
+            except Exception as e:
+                print(f"[{self.ip}:{self.port}] Error forwarding delete replication: {e}")
+
 
     def join(self, bootstrap_ip, bootstrap_port):
         # Ο κόμβος που δεν είναι bootstrap καλεί αυτή τη μέθοδο για να εισέλθει στο δίκτυο.
