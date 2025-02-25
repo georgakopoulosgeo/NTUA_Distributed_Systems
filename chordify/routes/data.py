@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify, current_app
 import hashlib
 import requests
+import threading
 
 data_bp = Blueprint('data', __name__)
 
@@ -99,6 +100,7 @@ def replicate_insert():
     # Call the node's replicate_insert method.
     node.replicate_insert(key, value, replication_count)
     return jsonify({"result": True, "message": "Replication step processed."}), 200
+
 
 
 @data_bp.route("/query", methods=["GET"])

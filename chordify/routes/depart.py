@@ -62,3 +62,30 @@ def depart():
             return jsonify({"message": "Node departed gracefully"}), 200
         else:
             return jsonify({"error": "Depart failed"}), 500
+
+@depart_bp.route("/absorb_keys", methods=["POST"])
+def absorb_keys():
+    """
+    This endpoint is called by a departing node so that its successor can absorb
+    the keys for which the departing node was primary.
+    The successor adds these keys to its own data_store and re-initiates the replication
+    process to rebuild the replication chain correctly. That replication chain will also
+    ensure that any stale replicas (from nodes further in the old chain) are removed.
+    """
+    node = current_app.config['NODE']
+    data = request.get_json()
+    keys = data.get("keys", {})
+    replication_factor = data.get("replication_factor", 3)
+    
+    # For each key from the departing node:
+    for key, value in keys.items():
+        # Add the key to the successor's data_store.
+        node.data_store[key] = value
+        # Re-establish the replication chain:
+        # The successor becomes the new primary for these keys.
+        # Initiate replication so that the new chain becomes:
+        # primary -> successor -> next node ... (with last node cleaning up stale replicas)
+        node.replicate_insert(key, value, replication_factor - 1)
+    
+    print(f"[{node.ip}:{node.port}] Absorbed keys from departing node: {list(keys.keys())}")
+    return jsonify({"message": "Keys absorbed and replication updated."}), 200

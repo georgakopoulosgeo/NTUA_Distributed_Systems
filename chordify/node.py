@@ -4,7 +4,7 @@ import threading
 import uuid
 
 class Node:
-    def __init__(self, ip, port, is_bootstrap=False):
+    def __init__(self, ip, port, is_bootstrap=False, consistency_mode="eventual", replcation_factor=3):
         #Αρχικοποίηση κόμβου.
         #:param ip: Η IP διεύθυνση του κόμβου.
         #:param port: Η θύρα στην οποία ακούει ο κόμβος.
@@ -19,8 +19,8 @@ class Node:
         self.data_store = {}   # Αποθήκη για τα key-value δεδομένα
         self.pending_requests = {} # Κρατάει τα αιτήματα που περιμένουν απάντηση
         self.replica_store = {}  # New: storage for replicated key-value pairs.
-        self.replication_factor = 3  # Default replication factor k=1 (i.e. no extra copies). Set to 3, 5, etc. as needed.
-
+        self.replication_factor = replcation_factor  # Default replication factor k=1 (i.e. no extra copies). Set to 3, 5, etc. as needed.
+        self.consistency_mode = consistency_mode
 
     def compute_hash(self, key):
         # Υπολογισμός του SHA1 hash ενός string και επιστροφή ως ακέραιος.
@@ -51,11 +51,11 @@ class Node:
         """
         if origin is None:
             # Setup origin info for callback
-            import uuid, threading
             request_id = str(uuid.uuid4())
             event = threading.Event()
             self.pending_requests[request_id] = {"event": event, "result": None}
             origin = {"ip": self.ip, "port": self.port, "request_id": request_id}
+            print(f"[{self.ip}:{self.port}] Origin request: {origin}")
 
         key_hash = self.compute_hash(key)
         if self.is_responsible(key_hash):
@@ -66,6 +66,7 @@ class Node:
             else:
                 self.data_store[key] = value
                 msg = f"Key '{key}' inserted at node {self.ip}."
+            print(f"[{self.ip}:{self.port}] {msg}")
 
             final_result = {
                 "result": True,
@@ -74,35 +75,37 @@ class Node:
                 "data_store": self.data_store
             }
 
-            # --- NEW: Initiate replication ---
+            # Replication step based on consistency mode
             if self.replication_factor > 1:
-                replication_count = self.replication_factor - 1
-                # Note: replicate_insert sends the key-value pair to the next k-1 nodes.
-                self.replicate_insert(key, value, replication_count)
+                if self.consistency_mode == "linearizability":
+                    # Synchronous chain replication
+                    replication_count = self.replication_factor - 1
+                    ack = self.chain_replicate_insert(key, value, replication_count)
+                    if not ack:
+                        final_result["result"] = False
+                        final_result["message"] += " Chain replication failed."
+                else:
+                    # Eventual consistency: asynchronous replication
+                    threading.Thread(target=self.async_replicate_insert, args=(key, value)).start()
 
-             # If this node is not the original requester, send a callback to notify the origin.
-            if not (origin["ip"] == self.ip and origin["port"] == self.port):
-                print(f"Insert processed; callback sent to origin {origin['ip']}:{origin['port']}")
+            # If this node is the origin, return the final result directly.
+            if origin is None or (origin["ip"] == self.ip and origin["port"] == self.port):
+                # If the node is the origin, it would typically signal the waiting thread (if you use pending_requests)
+                # For simplicity, we return the final result here.
+                return final_result
+            else:
+                # If not the origin, send a callback to the origin node.
                 callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
                 try:
-                    # Post the final result back to the origin node's insert_response endpoint.
                     requests.post(callback_url, json={
                         "request_id": origin["request_id"],
                         "final_result": final_result
-                    })
+                    }, timeout=2)
+                    print(f"Callback sent to origin {origin['ip']}:{origin['port']}")
                 except Exception as e:
                     print(f"Error sending callback: {e}")
-                
-                # Return a confirmation that the insert has been processed and callback sent. (Not necessary but okey)
-                
+                # Return an intermediate response.
                 return {"result": True, "message": "Insert processed; callback sent to origin."}
-            else:
-                # If this node is the origin update the pending request with the final result and signal the event.
-                req_id = origin["request_id"]
-                if req_id in self.pending_requests:
-                    self.pending_requests[req_id]["result"] = final_result
-                    self.pending_requests[req_id]["event"].set()
-                return final_result
 
         else:
             # If this node is not responsible, forward the insert request to the successor.
@@ -118,21 +121,72 @@ class Node:
             return {"result": True, "message": "Insert forwarded."}
         
 
-    def replicate_insert(self, key: str, value: str, replication_count: int):
-        """
-        Handles replication of a key-value pair.
-        Stores the replica locally and forwards the replication message to the successor
-        if more copies are needed.
-        """
-        # Store the replica in replica_store (if already present, append or update as needed)
+    def chain_replicate_insert(self, key: str, value: str, replication_count: int) -> bool:
+        # Synchronously update local store
+        self.data_store[key] = value
+        print(f"[{self.ip}:{self.port}] (Chain) Stored key '{key}' locally.")
+
+        if replication_count > 0:
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/chain_replicate_insert"
+            payload = {
+                "key": key,
+                "value": value,
+                "replication_count": replication_count - 1
+            }
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding chain replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
+                response = requests.post(url, json=payload, timeout=2)
+                if response.status_code == 200:
+                    ack = response.json().get("ack", False)
+                    return ack
+                else:
+                    print(f"Chain replication failed at {successor_ip}:{successor_port}: {response.text}")
+                    return False
+            except Exception as e:
+                print(f"Error in chain replication: {e}")
+                return False
+
+        else:
+            # We are at the last valid replica in the new chain.
+            # Instruct our successor to delete any stale replica of the key.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+            payload = {"key": key, "replication_count": 0}
+            try:
+                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
+                requests.post(url, json=payload, timeout=2)
+            except Exception as e:
+                print(f"Error instructing deletion of stale replica: {e}")
+
+
+    def async_replicate_insert(self, key: str, value: str):
+        # Store in replica store or update local store replica copy
         if key in self.replica_store:
             self.replica_store[key] += f" | {value}"
         else:
             self.replica_store[key] = value
-        print(f"[{self.ip}:{self.port}] Stored replica for key '{key}'.")
+        print(f"[{self.ip}:{self.port}] Asynchronously stored replica for key '{key}'.")
 
+        # Propagate asynchronously to the successor if needed
+        successor_ip = self.successor["ip"]
+        successor_port = self.successor["port"]
+        url = f"http://{successor_ip}:{successor_port}/replicate_insert"
+        payload = {"key": key, "value": value, "replication_count": self.replication_factor - 1}
+        try:
+            requests.post(url, json=payload, timeout=2)
+        except Exception as e:
+            print(f"Error in async replication: {e}")
+
+    def replicate_insert(self, key: str, value: str, replication_count: int):
+        """
+        Αυτή η μέθοδος καλείται από τον κόμβο για να αντιγράψει ένα key-value ζεύγος σε άλλους κόμβους.
+        """
+        self.replica_store[key] = value
         if replication_count > 0:
-            # Forward the replication request to the immediate successor.
+            # Αν ο replication_count είναι μεγαλύτερος του 0, προωθούμε το key-value ζεύγος στον επόμενο κόμβο.
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/replicate_insert"
@@ -145,8 +199,20 @@ class Node:
                 print(f"[{self.ip}:{self.port}] Forwarding replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
                 requests.post(url, json=payload)
             except Exception as e:
-                print(f"Error forwarding replication: {e}")
-        
+                print(f"Error in replication: {e}")
+        else:
+            # We are at the last valid replica in the new chain.
+            # Instruct our successor to delete any stale replica of the key.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+            payload = {"key": key, "replication_count": 0}
+            try:
+                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
+                requests.post(url, json=payload, timeout=2)
+            except Exception as e:
+                print(f"Error instructing deletion of stale replica: {e}")
+
     def query(self, key: str, origin: dict = None) -> dict:
         key_hash = self.compute_hash(key)
         # If no origin is provided, this node is the original requester.
@@ -334,7 +400,7 @@ class Node:
             }
             try:
                 print(f"[{self.ip}:{self.port}] Forwarding delete replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
-                requests.post(url, json=payload)
+                requests.post(url, json=payload, timeout=2)
             except Exception as e:
                 print(f"[{self.ip}:{self.port}] Error forwarding delete replication: {e}")
 
@@ -351,7 +417,21 @@ class Node:
                 data = response.json()
                 self.successor = data.get('successor')
                 self.predecessor = data.get('predecessor')
+                # Incorporate the keys transferred by the successor.
+                transferred_data_store = data.get("data_store", {})
+                transferred_replica_store = data.get("replica_store", {})
+
+                # Update local stores with transferred keys:
+                self.data_store.update(transferred_data_store)
+                self.replica_store.update(transferred_replica_store)
+
+                # For each key that was stolen, initiate a new replication chain.
+                for key, value in transferred_data_store.items():
+                    # This will send the new primary's value to the next (k-1) nodes.
+                    self.replicate_insert(key, value, self.replication_factor - 1)
+
                 print(f"[{self.ip}:{self.port}] Joined network: successor={self.successor}, predecessor={self.predecessor}")
+                print(f"[{self.ip}:{self.port}] Updated local data_store with keys: {list(transferred_data_store.keys())}")
                 return True
             else:
                 return False
@@ -378,31 +458,61 @@ class Node:
             
     def depart(self):
         """
-        Στην απλή «global ring» λογική, απλώς καλούμε τον bootstrap
-        να μας αφαιρέσει από το ring. (Αν ήμασταν σε full Chord,
-        θα ενημερώναμε successor, predecessor, κλπ.)
+        1. Notifies only the predecessor and successor to update their neighbor pointers.
+        2. Transfers all keys (from data_store) to the successor so that the successor becomes
+        the new primary for these keys.
+        3. The successor, on absorbing these keys, re-initiates the replication chain, which also
+        cleans up any stale replicas from further down the ring.
         """
-        # Αν δεν είμαστε bootstrap, καλούμε τον bootstrap
-        if not self.is_bootstrap:
-            url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/remove_node"
-            payload = {
-                "id": self.id,
-                "ip": self.ip,
-                "port": self.port
-            }
-            try:
-                r = requests.post(url, json=payload)
-                if r.status_code == 200:
-                    print(f"[{self.ip}:{self.port}] Departed gracefully from ring.")
-                    return True
-                else:
-                    print(f"[{self.ip}:{self.port}] Depart error: {r.text}")
-                    return False
-            except Exception as e:
-                print("Error calling remove_node on bootstrap:", e)
-                return False
-        else:
-            # Αν είμαστε bootstrap, θεωρητικά δεν αποχωρούμε
+        if self.is_bootstrap:
             print("Bootstrap node does not depart.")
             return False
 
+        # Notify predecessor: its new successor should be our successor.
+        try:
+            pred_ip = self.predecessor["ip"]
+            pred_port = self.predecessor["port"]
+            url = f"http://{pred_ip}:{pred_port}/update_neighbors"
+            payload = {
+                "successor": self.successor,  # predecessor's successor becomes our successor
+                "predecessor": self.predecessor.get("predecessor", {})  # remain unchanged or as applicable
+            }
+            requests.post(url, json=payload)
+            print(f"[{self.ip}:{self.port}] Notified predecessor at {pred_ip}:{pred_port}.")
+        except Exception as e:
+            print(f"Error updating predecessor: {e}")
+
+        # Notify successor: its new predecessor should be our predecessor.
+        try:
+            succ_ip = self.successor["ip"]
+            succ_port = self.successor["port"]
+            url = f"http://{succ_ip}:{succ_port}/update_neighbors"
+            payload = {
+                "successor": self.successor.get("successor", {}),  # may be updated later by the successor itself
+                "predecessor": self.predecessor  # new predecessor for successor becomes our predecessor
+            }
+            requests.post(url, json=payload)
+            print(f"[{self.ip}:{self.port}] Notified successor at {succ_ip}:{succ_port}.")
+        except Exception as e:
+            print(f"Error updating successor: {e}")
+
+        # Transfer all keys from our data_store (for which we are primary) to our successor.
+        try:
+            url = f"http://{succ_ip}:{succ_port}/absorb_keys"
+            payload = {
+                "keys": self.data_store,
+                "replication_factor": self.replication_factor
+            }
+            response = requests.post(url, json=payload)
+            if response.status_code == 200:
+                print(f"[{self.ip}:{self.port}] Keys transferred to successor {succ_ip}:{succ_port}.")
+            else:
+                print(f"[{self.ip}:{self.port}] Failed to transfer keys: {response.text}")
+        except Exception as e:
+            print(f"Error transferring keys to successor: {e}")
+
+        # Clean up our local stores.
+        self.data_store.clear()
+        self.replica_store.clear()
+        print(f"[{self.ip}:{self.port}] Departed gracefully from the ring.")
+        return True
