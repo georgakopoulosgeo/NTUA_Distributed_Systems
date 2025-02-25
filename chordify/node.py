@@ -176,6 +176,7 @@ class Node:
         url = f"http://{successor_ip}:{successor_port}/replicate_insert"
         payload = {"key": key, "value": value, "replication_count": self.replication_factor - 1}
         try:
+            print(f"[{self.ip}:{self.port}] Forwarding async replication for key '{key}' to {successor_ip}:{successor_port}.")
             requests.post(url, json=payload, timeout=2)
         except Exception as e:
             print(f"Error in async replication: {e}")
