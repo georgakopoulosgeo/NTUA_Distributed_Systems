@@ -26,6 +26,8 @@ def compute_hash(key):
     h = hashlib.sha1(key.encode('utf-8')).hexdigest()
     return int(h, 16)
 
+
+
 @data_bp.route("/insert", methods=["POST"])
 def insert():
     '''
@@ -152,6 +154,26 @@ def query_response():
         return jsonify({"result": True, "message": "Query callback received."}), 200
     else:
         return jsonify({"result": False, "error": "Unknown request_id"}), 404
+    
+@data_bp.route("/local_query", methods=["GET"])
+def local_query():
+    """
+    Retrieve a key's value ONLY from the local node (without forwarding).
+    """
+    node = current_app.config["NODE"]
+    key = request.args.get("key")  # Extract the key from query parameters
+
+    if not key:
+        return jsonify({"error": "Missing key parameter"}), 400
+
+    # Check only the local data store
+    if key in node.data_store:
+        return jsonify({"result": True, "value": node.data_store[key], "source": "local_store"}), 200
+    elif key in node.replica_store:
+        return jsonify({"result": True, "value": node.replica_store[key], "source": "replica_store"}), 200
+    else:
+        return jsonify({"error": "Key not found", "source": "none"}), 404
+
     
 
 @data_bp.route("/delete", methods=["POST"])
