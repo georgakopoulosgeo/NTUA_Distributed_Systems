@@ -19,7 +19,7 @@ services:
       - "8000:8000"
     command: >
       python app.py
-      --ip 0.0.0.0
+      --ip bootstrap
       --port 8000
       --bootstrap
 

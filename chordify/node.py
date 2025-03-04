@@ -2,6 +2,7 @@ import hashlib
 import requests
 import threading
 import uuid
+# import replication 
 
 class Node:
     def __init__(self, ip, port, is_bootstrap=False, consistency_mode="eventual", replcation_factor=3):
@@ -86,7 +87,7 @@ class Node:
                         final_result["message"] += " Chain replication failed."
                 else:
                     # Eventual consistency: asynchronous replication
-                    threading.Thread(target=self.async_replicate_insert, args=(key, value)).start()
+                    threading.Thread(target=self.async_replicate_insert, args=(key, value, self.replication_factor - 1)).start()
 
             # If this node is the origin, return the final result directly.
             if origin is None or (origin["ip"] == self.ip and origin["port"] == self.port):
@@ -101,7 +102,7 @@ class Node:
                         "request_id": origin["request_id"],
                         "final_result": final_result
                     }, timeout=2)
-                    print(f"Callback sent to origin {origin['ip']}:{origin['port']}")
+                    print(f"[{self.ip}:{self.port}] Insert processed; callback sent to origin {origin['ip']}:{origin['port']}")
                 except Exception as e:
                     print(f"Error sending callback: {e}")
                 # Return an intermediate response.
@@ -162,25 +163,38 @@ class Node:
                 print(f"Error instructing deletion of stale replica: {e}")
 
 
-    def async_replicate_insert(self, key: str, value: str):
-        # Store in replica store or update local store replica copy
+    def async_replicate_insert(self, key: str, value: str, replication_count: int):
+    # Store in replica store (update if exists)
         if key in self.replica_store:
             self.replica_store[key] += f" | {value}"
         else:
             self.replica_store[key] = value
         print(f"[{self.ip}:{self.port}] Asynchronously stored replica for key '{key}'.")
 
-        # Propagate asynchronously to the successor if needed
-        successor_ip = self.successor["ip"]
-        successor_port = self.successor["port"]
-        url = f"http://{successor_ip}:{successor_port}/replicate_insert"
-        payload = {"key": key, "value": value, "replication_count": self.replication_factor - 1}
-        try:
-            print(f"[{self.ip}:{self.port}] Forwarding async replication for key '{key}' to {successor_ip}:{successor_port}.")
-            requests.post(url, json=payload, timeout=2)
-        except Exception as e:
-            print(f"Error in async replication: {e}")
+        if replication_count > 0:
+            # Propagate asynchronously to the successor with a decremented count.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/async_replicate_insert"
+            payload = {"key": key, "value": value, "replication_count": replication_count - 1}
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding async replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
+                requests.post(url, json=payload, timeout=2)
+            except Exception as e:
+                print(f"Error in async replication: {e}")
+        else:
+            # When replication_count is 0, instruct the successor to delete any stale replica.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+            payload = {"key": key, "replication_count": 0}
+            try:
+                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
+                requests.post(url, json=payload, timeout=2)
+            except Exception as e:
+                print(f"Error instructing deletion of stale replica: {e}")
 
+    '''
     def replicate_insert(self, key: str, value: str, replication_count: int):
         """
         Αυτή η μέθοδος καλείται από τον κόμβο για να αντιγράψει ένα key-value ζεύγος σε άλλους κόμβους.
@@ -213,7 +227,8 @@ class Node:
                 requests.post(url, json=payload, timeout=2)
             except Exception as e:
                 print(f"Error instructing deletion of stale replica: {e}")
-
+    '''
+                
     def query(self, key: str, origin: dict = None) -> dict:
         key_hash = self.compute_hash(key)
         # If no origin is provided, this node is the original requester.
@@ -428,8 +443,11 @@ class Node:
 
                 # For each key that was stolen, initiate a new replication chain.
                 for key, value in transferred_data_store.items():
-                    # This will send the new primary's value to the next (k-1) nodes.
-                    self.replicate_insert(key, value, self.replication_factor - 1)
+                    # Start a new thread so that the new node doesn't block its join.
+                    threading.Thread(
+                        target=self.async_replicate_insert,
+                        args=(key, value, self.replication_factor - 1)
+                    ).start()
 
                 print(f"[{self.ip}:{self.port}] Joined network: successor={self.successor}, predecessor={self.predecessor}")
                 print(f"[{self.ip}:{self.port}] Updated local data_store with keys: {list(transferred_data_store.keys())}")

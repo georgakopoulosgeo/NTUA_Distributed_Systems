@@ -33,6 +33,16 @@ sudo docker run -d \
     chordify \
     python app.py --ip node5 --port 8005 --bootstrap_ip bootstrap --bootstrap_port 8000
 
+sudo docker run -d \
+    --network chordify_default \
+    --name node6 \
+    -v $(pwd):/app \
+    -e IP=node6 \
+    -e PORT=8006 \
+    -p 8006:8006 \
+    chordify \
+    python app.py --ip node6 --port 8006 --bootstrap_ip bootstrap --bootstrap_port 8000
+
 
 // get network
 curl -X GET http://127.0.0.1:8001/overlay
@@ -63,6 +73,8 @@ bootstrap
 
 1060835990263383605338597466665306717774306438481 - song2
 
+897157909036590648573699943635484619774617861767 - yolo
+
 5
 605907502187820619582591828504881381613563872501
 
@@ -81,7 +93,7 @@ bootstrap
 1
 171865491289448819003469989719053766790160449571
 
-897157909036590648573699943635484619774617861767 - yolo
+
 
 /// insert / query / delete
 curl -X POST http://node3:8000/insert \

@@ -4,8 +4,10 @@ from flask import Flask
 from node import Node
 from routes.join import join_bp
 from routes.depart import depart_bp
-from routes.data import data_bp
 from routes.overlay import overlay_bp
+from routes.query import query_bp
+from routes.delete import delete_bp
+from routes.insert import insert_bp
 
 app = Flask(__name__)
 
@@ -18,8 +20,10 @@ app.config['RING'] = []
 # Register blueprints for different functionalities
 app.register_blueprint(join_bp)
 app.register_blueprint(depart_bp)
-app.register_blueprint(data_bp)
+app.register_blueprint(insert_bp)
 app.register_blueprint(overlay_bp)
+app.register_blueprint(query_bp)
+app.register_blueprint(delete_bp)
 
 if __name__ == '__main__':
     
