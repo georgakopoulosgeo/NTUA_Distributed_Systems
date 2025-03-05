@@ -12,6 +12,9 @@ def query():
     origin_ip = request.args.get("origin_ip")
     origin_port = request.args.get("origin_port")
     request_id = request.args.get("request_id")
+    chain_count_param = request.args.get("chain_count")
+    chain_count = int(chain_count_param) if chain_count_param else None
+
     origin = None
     if origin_ip and origin_port and request_id:
         origin = {"ip": origin_ip, "port": origin_port, "request_id": request_id}
@@ -19,12 +22,17 @@ def query():
     if not key:
         return jsonify({"error": "Missing key parameter"}), 400
 
-    if key == "*":  # Wildcard query remains unchanged
-        print(f"Node {node.ip}:{node.port} querying for ALL keys (wildcard '*').")
-        all_songs = node.query_wildcard(origin=f"{node.ip}:{node.port}")
+    # --- Wildcard Query Handling ---
+    if key == "*":
+        # For wildcard queries, use a single 'origin' parameter (ip:port) to track the initiator.
+        origin = request.args.get("origin")
+        if not origin:
+            origin = f"{node.ip}:{node.port}"
+        #print(f"[{node.ip}:{node.port}] Processing wildcard query with origin {origin}")
+        all_songs = node.query_wildcard(origin)
         return jsonify({"all_songs": all_songs}), 200
 
-    result = node.query(key, origin)
+    result = node.query(key, origin, chain_count)
 
     # If this node is the original requester, wait for the query callback.
     if origin is None:

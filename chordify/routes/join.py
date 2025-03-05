@@ -114,6 +114,8 @@ def join():
         "predecessor": ring[new_index]["predecessor"],
         "data_store": transferred_data.get("data_store", {}),
         "replica_store": transferred_data.get("replica_store", {}),
+        "replication_factor": node.replication_factor,
+        "consistency": node.consistency_mode,
         "ring": ring  # For debugging purposes
     }), 200
 
@@ -151,7 +153,7 @@ def update_neighbors():
     data = request.get_json()
     new_successor = data.get("successor")
     new_predecessor = data.get("predecessor")
-    print(f"[{node.ip}:{node.port}] Ενημέρωση γειτόνων: successor={new_successor}, predecessor={new_predecessor}")
+    print(f"[{node.ip}:{node.port}] Neighbor updated successfully")
     node.update_neighbors(new_successor, new_predecessor)
     return jsonify({"message": "Neighbors updated successfully"}), 200
 

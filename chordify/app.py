@@ -33,10 +33,12 @@ if __name__ == '__main__':
     parser.add_argument("--bootstrap", action="store_true", help="Ενεργοποίηση ως bootstrap κόμβος")
     parser.add_argument("--bootstrap_ip", type=str, default="127.0.0.1", help="IP του bootstrap κόμβου")
     parser.add_argument("--bootstrap_port", type=int, default=8000, help="Θύρα του bootstrap κόμβου")
+    parser.add_argument("--replication_factor", type=int, default=1, help="Replication factor for data")
+    parser.add_argument("--consistency_mode", type=str, choices=["linearizability", "eventual"], default="strong", help="Consistency mode for data replication")
     args = parser.parse_args()
 
     # Initialize the Node instance
-    node = Node(ip=args.ip, port=args.port, is_bootstrap=args.bootstrap)
+    node = Node(ip=args.ip, port=args.port, is_bootstrap=args.bootstrap, consistency_mode=args.consistency_mode, replication_factor=args.replication_factor)
     # Store bootstrap info for non-bootstrap nodes
     if not node.is_bootstrap:
         node.bootstrap_ip = args.bootstrap_ip

@@ -16,6 +16,8 @@ def node_info():
         #"port": node.port,
         #"is_bootstrap": node.is_bootstrap,
         "data_store": node.data_store,
+        "replication_factor": node.replication_factor,
+        "consistency_mode": node.consistency_mode,
         #"successor": node.successor,
         #"predecessor": node.predecessor,
         # Optionally, include details on pending requests if desired:
@@ -102,3 +104,20 @@ def async_replicate_insert():
     # Call the node's replicate_insert method.
     node.async_replicate_insert(key, value, replication_count)
     return jsonify({"result": True, "message": "Replication step processed."}), 200
+
+@insert_bp.route("/chain_replicate_insert", methods=["POST"])
+def chain_replicate_insert():
+    """
+    This endpoint receives chain replication requests. It expects a JSON payload with:
+       - key: the key to replicate
+       - value: the associated value
+       - replication_count: the number of additional replicas to create
+    """
+    node = current_app.config["NODE"]
+    data = request.get_json()
+    key = data.get("key")
+    value = data.get("value")
+    replication_count = data.get("replication_count", 0)
+    # Call the node's chain_replicate_insert method.
+    node.chain_replicate_insert(key, value, replication_count)
+    return jsonify({"ack":True, "result": True, "message": "Chain replication step processed."}), 200
