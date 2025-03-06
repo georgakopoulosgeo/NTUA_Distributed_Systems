@@ -1,4 +1,6 @@
 # routes/data.py
+import random
+import time
 from flask import Blueprint, request, jsonify, current_app
 import hashlib
 import requests
@@ -121,3 +123,35 @@ def chain_replicate_insert():
     # Call the node's chain_replicate_insert method.
     node.chain_replicate_insert(key, value, replication_count)
     return jsonify({"ack":True, "result": True, "message": "Chain replication step processed."}), 200
+
+@insert_bp.route("/start_inserts", methods=["POST"])
+def start_inserts():
+    data = request.get_json()
+    file_number = data.get("file_number", "00")  # default if missing
+    file_path = f"../expirements/insert/insert_{file_number}_part.txt"
+    node = current_app.config["NODE"]
+    port = node.port
+
+    # Read lines
+    try:
+        with open(file_path, "r") as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return jsonify({
+            "status": "error",
+            "message": f"File not found: {file_path}"
+        }), 404
+
+    start_time = time.time()
+    # Perform the actual inserts
+    for key in lines:
+        # Either a direct local insert(key, value) or:
+        requests.post(f"http://127.0.0.1:{port}/insert",
+                      json={"key": key, "value": f"value_from_{file_number}"})
+    duration = time.time() - start_time
+
+    return jsonify({
+        "status": "done",
+        "inserted": len(lines),
+        "time_seconds": round(duration, 2)
+    }), 200
