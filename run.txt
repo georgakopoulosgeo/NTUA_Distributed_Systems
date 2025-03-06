@@ -16,6 +16,11 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
 
 Invoke-WebRequest -Uri "http://127.0.0.1:8001/query/song1" -Method Get
 
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/delete" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1"}'
+
 
 ///// Docker compose yml
 sudo docker-compose build

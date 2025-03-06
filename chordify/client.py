@@ -1,104 +1,193 @@
-# client.py
 import argparse
 import requests
+from colorama import Fore, Style, init
 
-def insert_cmd(node_addr):
-    key = input("Key: ")
-    value = input("Value: ")
+# Initialize colorama so ANSI escape sequences will work on all platforms.
+init(autoreset=True)
+
+def insert_cmd(node_addr, key, value):
     url = f"http://{node_addr}/insert"
     payload = {"key": key, "value": value}
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        print("Επιτυχής εισαγωγή/ενημέρωση:", response.json())
+        print(Fore.GREEN + "\n[Insert successful]" + Style.RESET_ALL)
+        print(response.json())
+        print()  # blank line
     except Exception as e:
-        print("Σφάλμα κατά την αποστολή:", e)
+        print(Fore.RED + "\n[Error during insert]" + Style.RESET_ALL, e)
+        print()
 
-def query_cmd(node_addr):
-    key = input("Key: ")
-    url = f"http://{node_addr}/query/{key}"
+def query_cmd(node_addr, key):
+    # Using local_query endpoint for synchronous response
+    url = f"http://{node_addr}/local_query"
+    params = {"key": key}
     try:
-        response = requests.get(url)
+        response = requests.get(url, params=params)
         response.raise_for_status()
-        print("Αποτέλεσμα query:", response.json())
+        print(Fore.GREEN + "\n[Query result]" + Style.RESET_ALL)
+        print(response.json())
+        print()  # blank line
     except Exception as e:
-        print("Σφάλμα κατά την αποστολή:", e)
+        print(Fore.RED + "\n[Error during query]" + Style.RESET_ALL, e)
+        print()
 
-def delete_cmd(node_addr):
-    key = input("Key: ")
+def delete_cmd(node_addr, key):
     url = f"http://{node_addr}/delete"
     payload = {"key": key}
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        print("Επιτυχής διαγραφή:", response.json())
+        print(Fore.GREEN + "\n[Delete successful]" + Style.RESET_ALL)
+        print(response.json())
+        print()  # blank line
     except Exception as e:
-        print("Σφάλμα κατά την αποστολή:", e)
+        print(Fore.RED + "\n[Error during delete]" + Style.RESET_ALL, e)
+        print()
+
+def join_cmd(node_addr, ip, port, node_id):
+    """
+    Sends a join request to the target node (which must be the bootstrap node).
+    The payload includes the joining node's ip, port, and id.
+    """
+    url = f"http://{node_addr}/join"
+    payload = {"ip": ip, "port": port, "id": node_id}
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        print(Fore.GREEN + "\n[Join successful]" + Style.RESET_ALL)
+        print(response.json())
+        print()  # blank line
+    except Exception as e:
+        print(Fore.RED + "\n[Error during join]" + Style.RESET_ALL, e)
+        print()
+
+def depart_cmd(node_addr):
+    """
+    Sends a depart request to the target node.
+    The node will handle its own graceful departure if it is not the bootstrap.
+    """
+    url = f"http://{node_addr}/depart"
+    try:
+        response = requests.post(url, json={})
+        response.raise_for_status()
+        print(Fore.GREEN + "\n[Depart successful]" + Style.RESET_ALL)
+        print(response.json())
+        print()  # blank line
+    except Exception as e:
+        print(Fore.RED + "\n[Error during depart]" + Style.RESET_ALL, e)
+        print()
 
 def overlay_cmd(node_addr):
+    """
+    Retrieves the current overlay (ring) information by sending a GET request to the /overlay endpoint.
+    """
     url = f"http://{node_addr}/overlay"
     try:
         response = requests.get(url)
         response.raise_for_status()
-        data = response.json()
-        if "ring" in data:
-            print("Overlay (Ring):")
-            for node in data["ring"]:
-                print(f"  Node {node['ip']}:{node['port']} (id={node['id']}), "
-                      f"Predecessor: {node['predecessor']['id']}, "
-                      f"Successor: {node['successor']['id']}")
-        else:
-            print("Απάντηση:", data)
+        print(Fore.GREEN + "\n[Overlay info]" + Style.RESET_ALL)
+        print(response.json())
+        print()  # blank line
     except Exception as e:
-        print("Σφάλμα κατά την αποστολή:", e)
+        print(Fore.RED + "\n[Error during overlay]" + Style.RESET_ALL, e)
+        print()
 
-def depart_cmd(node_addr):
-    url = f"http://{node_addr}/depart"
-    try:
-        response = requests.post(url)
-        response.raise_for_status()
-        print("Αποχώρηση επιτυχής:", response.json())
-        return True
-    except Exception as e:
-        print("Σφάλμα κατά την αποχώρηση:", e)
-        return False
-
-def print_menu():
-    print("\nChordify Client")
-    print("1. Insert <key> <value>")
-    print("2. Query <key>")
-    print("3. Delete <key>")
-    print("4. Overlay")
-    print("5. Depart")
-    print("6. Exit")
+def print_intro(node_addr):
+    print(Fore.CYAN + f"Connected to node: http://{node_addr}" + Style.RESET_ALL)
+    print(Fore.YELLOW + "Enter commands in the following format:" + Style.RESET_ALL)
+    print("  Insert <key> <value>")
+    print("  Query <key>")
+    print("  Delete <key>")
+    print("  Join <ip> <port> <id>")
+    print("  Depart")
+    print("  Overlay")
+    print(Fore.YELLOW + "Type 'Exit' to quit." + Style.RESET_ALL)
+    print()
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--node", type=str, required=True,
-                        help="Διεύθυνση κόμβου σε μορφή ip:port (π.χ. node1:8001)")
+    parser = argparse.ArgumentParser(
+        description="Client for interacting with a specific node in the distributed system"
+    )
+    parser.add_argument(
+        "--node", 
+        type=str, 
+        required=True,
+        help="Target node address in the format ip:port (e.g., 127.0.0.1:8001)"
+    )
     args = parser.parse_args()
     node_addr = args.node
 
-    print(f"Συνδεδεμένος με τον κόμβο: http://{node_addr}")
-    print_menu()
+    print_intro(node_addr)
+
     while True:
-        choice = input("Επιλογή: ").strip()
-        if choice == "1":
-            insert_cmd(node_addr)
-        elif choice == "2":
-            query_cmd(node_addr)
-        elif choice == "3":
-            delete_cmd(node_addr)
-        elif choice == "4":
-            overlay_cmd(node_addr)
-        elif choice == "5":
-            if depart_cmd(node_addr):
-                break  # Κλείνουμε το client αφού ο κόμβος αποχωρήσει
-        elif choice == "6":
-            print("Έξοδος από το client.")
+        try:
+            command_line = input(Fore.BLUE + "> " + Style.RESET_ALL).strip()
+        except KeyboardInterrupt:
+            print(Fore.MAGENTA + "\nExiting client." + Style.RESET_ALL)
             break
+
+        if not command_line:
+            continue
+        if command_line.lower() == "exit":
+            print(Fore.MAGENTA + "Exiting client." + Style.RESET_ALL)
+            break
+
+        tokens = command_line.split()
+        cmd = tokens[0].lower()
+
+        if cmd == "insert":
+            if len(tokens) < 3:
+                print(Fore.RED + "Usage: Insert <key> <value>" + Style.RESET_ALL)
+                print()
+                continue
+            key = tokens[1]
+            value = " ".join(tokens[2:])
+            insert_cmd(node_addr, key, value)
+
+        elif cmd == "query":
+            if len(tokens) != 2:
+                print(Fore.RED + "Usage: Query <key>" + Style.RESET_ALL)
+                print()
+                continue
+            key = tokens[1]
+            query_cmd(node_addr, key)
+
+        elif cmd == "delete":
+            if len(tokens) != 2:
+                print(Fore.RED + "Usage: Delete <key>" + Style.RESET_ALL)
+                print()
+                continue
+            key = tokens[1]
+            delete_cmd(node_addr, key)
+
+        elif cmd == "join":
+            if len(tokens) != 4:
+                print(Fore.RED + "Usage: Join <ip> <port> <id>" + Style.RESET_ALL)
+                print()
+                continue
+            ip = tokens[1]
+            port = tokens[2]
+            node_id = tokens[3]
+            join_cmd(node_addr, ip, port, node_id)
+
+        elif cmd == "depart":
+            if len(tokens) != 1:
+                print(Fore.RED + "Usage: Depart" + Style.RESET_ALL)
+                print()
+                continue
+            depart_cmd(node_addr)
+
+        elif cmd == "overlay":
+            if len(tokens) != 1:
+                print(Fore.RED + "Usage: Overlay" + Style.RESET_ALL)
+                print()
+                continue
+            overlay_cmd(node_addr)
+
         else:
-            print("Μη έγκυρη επιλογή, δοκιμάστε ξανά.")
+            print(Fore.RED + "Invalid command. Use Insert, Query, Delete, Join, Depart, or Overlay." + Style.RESET_ALL)
+            print()
 
 if __name__ == "__main__":
     main()
