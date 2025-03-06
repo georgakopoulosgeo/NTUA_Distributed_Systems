@@ -21,7 +21,7 @@ class Node:
         self.pending_requests = {} # Κρατάει τα αιτήματα που περιμένουν απάντηση
         self.replica_store = {}  # New: storage for replicated key-value pairs.
         self.replication_factor = replication_factor  # Default replication factor k=1 (i.e. no extra copies). Set to 3, 5, etc. as needed.
-        self.consistency_mode = consistency_mode
+        self.consistency_mode = consistency_mode # Default consistency mode: strong (linearizability). Set to "eventual" for eventual consistency.
 
     def compute_hash(self, key):
         # Υπολογισμός του SHA1 hash ενός string και επιστροφή ως ακέραιος.
@@ -370,104 +370,151 @@ class Node:
         merged_data.update(successor_data)
         return merged_data
     
-    def delete(self, key: str, origin: dict = None) -> dict:
-        # If origin is None, this node is the original requester
+    def delete(self, key: str, origin: dict = None):
+        """
+        Delete a key (song) from the node.
+        If origin is None, this node is the origin and sets up a pending request.
+        Otherwise, the request is being forwarded.
+        """
         if origin is None:
+            # Setup origin info for callback
             request_id = str(uuid.uuid4())
             event = threading.Event()
             self.pending_requests[request_id] = {"event": event, "result": None}
-            origin = {
-                "ip": self.ip,
-                "port": self.port,
-                "request_id": request_id
-            }
+            origin = {"ip": self.ip, "port": self.port, "request_id": request_id}
+            print(f"[{self.ip}:{self.port}] Origin delete request: {origin}")
 
         key_hash = self.compute_hash(key)
         if self.is_responsible(key_hash):
+            # Responsible node: attempt deletion in own data_store
             if key in self.data_store:
                 del self.data_store[key]
                 msg = f"Key '{key}' deleted from node {self.ip}."
-                final_result = {
-                    "result": True,
-                    "message": msg,
-                    "ip": self.ip,
-                    "data_store": self.data_store
-                }
+                result = True
             else:
                 msg = f"Key '{key}' not found on node {self.ip}."
-                final_result = {
-                    "result": False,
-                    "error": msg,
-                    "ip": self.ip
-                }
+                result = False
+            final_result = {
+                "result": result,
+                "message": msg,
+                "ip": self.ip,
+                "data_store": self.data_store
+            }
+            print(f"[{self.ip}:{self.port}] {msg}")
 
-            # Initiate replication deletion if replication is enabled.
+            # Propagate deletion to replicas if needed
             if self.replication_factor > 1:
-                replication_count = self.replication_factor - 1
-                self.replicate_delete(key, replication_count)
+                if self.consistency_mode == "linearizability":
+                    replication_count = self.replication_factor - 1
+                    ack = self.chain_replicate_delete(key, replication_count)
+                    if not ack:
+                        final_result["result"] = False
+                        final_result["message"] += " Chain replication deletion failed."
+                        print(f"[{self.ip}:{self.port}] Chain replication deletion failed for key '{key}'.")
+                else:
+                    threading.Thread(target=self.async_replicate_delete, args=(key, self.replication_factor - 1)).start()
 
-            if not (origin["ip"] == self.ip and origin["port"] == self.port):
+            # Return or callback the final result
+            if origin is None or (origin["ip"] == self.ip and origin["port"] == self.port):
+                return final_result
+            else:
                 callback_url = f"http://{origin['ip']}:{origin['port']}/delete_response"
                 try:
-                    print(f"[{self.ip}:{self.port}] Delete processed; callback sent to origin {origin['ip']}:{origin['port']}")
                     requests.post(callback_url, json={
                         "request_id": origin["request_id"],
                         "final_result": final_result
-                    })
+                    }, timeout=2)
+                    print(f"[{self.ip}:{self.port}] Delete processed; callback sent to origin {origin['ip']}:{origin['port']}")
                 except Exception as e:
-                    print(f"[{self.ip}:{self.port}] Error sending delete callback: {e}")
-
+                    print(f"Error sending delete callback: {e}")
                 return {"result": True, "message": "Delete processed; callback sent to origin."}
-            else:
-                print(f"[{self.ip}:{self.port}] Delete processed; final result stored in pending_requests.")
-                req_id = origin["request_id"]
-                if req_id in self.pending_requests:
-                    self.pending_requests[req_id]["result"] = final_result
-                    self.pending_requests[req_id]["event"].set()
-                return final_result
-
         else:
-            successor_ip = self.successor.get("ip")
-            successor_port = self.successor.get("port")
+            # Not responsible: forward the delete request to the successor.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/delete"
-            payload = {
-                "key": key,
-                "origin": origin
-            }
+            payload = {"key": key, "origin": origin}
             try:
-                print(f"[{self.ip}:{self.port}] Forwarding delete request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
+                print(f"[{self.ip}:{self.port}] Forwarding delete request for key '{key}' to successor {successor_ip}:{successor_port}.")
                 requests.post(url, json=payload)
             except Exception as e:
-                return {"result": False, "error": f"Forwarding delete failed: {e}"}
+                return {"result": False, "error": f"Forwarding deletion failed: {e}"}
             return {"result": True, "message": "Delete forwarded."}
 
-
-    def replicate_delete(self, key: str, replication_count: int):
+    def chain_replicate_delete(self, key: str, replication_count: int) -> bool:
         """
-        Remove the key from the replica_store and, if required,
-        forward the deletion request to the successor.
+        Perform synchronous (chain) deletion replication.
+        Delete the key from the local store and, if more replicas are needed,
+        forward the delete request to the successor.
         """
-        if key in self.replica_store:
-            del self.replica_store[key]
-            print(f"[{self.ip}:{self.port}] Deleted replica for key '{key}'.")
+        if key in self.data_store:
+            del self.data_store[key]
+            print(f"[{self.ip}:{self.port}] (Chain) Deleted key '{key}' locally.")
         else:
-            print(f"[{self.ip}:{self.port}] No replica for key '{key}' found to delete.")
-
-        # Forward the deletion replication if further replicas need updating.
+            print(f"[{self.ip}:{self.port}] (Chain) Key '{key}' not found locally for deletion.")
+        
         if replication_count > 0:
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
-            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
-            payload = {
-                "key": key,
-                "replication_count": replication_count - 1
-            }
+            url = f"http://{successor_ip}:{successor_port}/chain_replicate_delete"
+            payload = {"key": key, "replication_count": replication_count - 1}
             try:
-                print(f"[{self.ip}:{self.port}] Forwarding delete replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
+                print(f"[{self.ip}:{self.port}] Forwarding chain deletion for key '{key}' to {successor_ip}:{successor_port} with count {replication_count}.")
+                response = requests.post(url, json=payload, timeout=2)
+                if response.status_code == 200:
+                    ack = response.json().get("ack", False)
+                    return ack
+                else:
+                    print(f"Chain deletion failed at {successor_ip}:{successor_port}: {response.text}")
+                    return False
+            except Exception as e:
+                print(f"Error in chain replication deletion: {e}")
+                return False
+        else:
+            # Instruct successor to delete any stale replica when count reaches 0.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+            payload = {"key": key, "replication_count": 0}
+            try:
+                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
                 requests.post(url, json=payload, timeout=2)
             except Exception as e:
-                print(f"[{self.ip}:{self.port}] Error forwarding delete replication: {e}")
+                print(f"Error instructing deletion of stale replica: {e}")
+            return True  # Assuming deletion of stale replica succeeds
 
+    def async_replicate_delete(self, key: str, replication_count: int):
+        """
+        Perform asynchronous deletion replication.
+        Delete the key from the replica store and propagate asynchronously.
+        """
+        if key in self.replica_store:
+            del self.replica_store[key]
+            print(f"[{self.ip}:{self.port}] Asynchronously deleted replica for key '{key}'.")
+        else:
+            print(f"[{self.ip}:{self.port}] Asynchronously: Key '{key}' not found in replica store.")
+
+        if replication_count > 0:
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/async_replicate_delete"
+            payload = {"key": key, "replication_count": replication_count - 1}
+            try:
+                print(f"[{self.ip}:{self.port}] Forwarding async deletion for key '{key}' to {successor_ip}:{successor_port} with count {replication_count - 1}.")
+                requests.post(url, json=payload, timeout=2)
+            except Exception as e:
+                print(f"Error in async deletion replication: {e}")
+        else:
+            # When no more asynchronous replication is needed, ensure stale replicas are cleaned.
+            successor_ip = self.successor["ip"]
+            successor_port = self.successor["port"]
+            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+            payload = {"key": key, "replication_count": 0}
+            try:
+                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}' after async deletion.")
+                requests.post(url, json=payload, timeout=2)
+            except Exception as e:
+                print(f"Error instructing deletion of stale replica: {e}")
 
     def join(self, bootstrap_ip, bootstrap_port):
         # Ο κόμβος που δεν είναι bootstrap καλεί αυτή τη μέθοδο για να εισέλθει στο δίκτυο.
@@ -510,6 +557,7 @@ class Node:
             return False
         
     def pull_neighbors(self):
+        # 
             # New method: the node can later pull updated neighbor info from the bootstrap.
             url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/get_neighbors"
             try:

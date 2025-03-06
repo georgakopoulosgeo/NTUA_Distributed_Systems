@@ -23,8 +23,7 @@ services:
       --port 8000
       --bootstrap
       --replication_factor 3
-      --consistency_mode linearizability
-
+      --consistency_mode eventual
   # - "- Node 1 --
   node1:
     build: .
