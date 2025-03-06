@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify, current_app
 import hashlib
 import requests
 import threading
+import os
+import time
 
 query_bp = Blueprint('query', __name__)
 
@@ -38,7 +40,7 @@ def query():
     if origin is None:
         req_id = list(node.pending_requests.keys())[-1]
         pending = node.pending_requests[req_id]
-        if pending["event"].wait(timeout=3):  # Wait up to 3 seconds
+        if pending["event"].wait(timeout=5):  # Wait up to 3 seconds
             final_result = pending["result"]
             del node.pending_requests[req_id]
             return jsonify(final_result), 200
@@ -83,3 +85,47 @@ def local_query():
         return jsonify({"result": True, "value": node.replica_store[key], "source": "replica_store"}), 200
     else:
         return jsonify({"error": "Key not found", "source": "none"}), 404
+
+@query_bp.route("/start_queries", methods=["POST"])
+def start_queries():
+    data = request.get_json()
+    file_number = data.get("file_number", "00")  # default file_number if not provided
+
+    # Build an absolute path relative to this file’s location
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "..", "expirements", "query", f"query_{file_number}.txt")
+
+    node = current_app.config["NODE"]
+    port = node.port
+
+    # Read query keys from the file
+    try:
+        with open(file_path, "r") as f:
+            keys = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return jsonify({
+            "status": "error",
+            "message": f"File not found: {file_path}"
+        }), 404
+
+    start_time = time.time()
+    results = []
+    # For each query key, perform the query using the node’s own /query (or /local_query) endpoint.
+    for key in keys:
+        try:
+            # Here we call the query endpoint locally on the same node.
+            # Adjust the endpoint path if needed (for example, it might be /local_query).
+            response = requests.get(f"http://127.0.0.1:{port}/query", params={"key": key})
+            response.raise_for_status()
+            result = response.json()
+            results.append({"key": key, "result": result})
+        except Exception as e:
+            results.append({"key": key, "error": str(e)})
+    duration = time.time() - start_time
+
+    return jsonify({
+        "status": "done",
+        "queried": len(keys),
+        "time_seconds": round(duration, 2),
+        "results": results
+    }), 200

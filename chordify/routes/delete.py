@@ -22,7 +22,7 @@ def delete():
         pending = node.pending_requests[req_id]
 
         # Wait for up to 3 seconds for the responsible node to callback
-        if pending["event"].wait(timeout=3):
+        if pending["event"].wait(timeout=5):
             final_result = pending["result"]
             # Clean up
             del node.pending_requests[req_id]
