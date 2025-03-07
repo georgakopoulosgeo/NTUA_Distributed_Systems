@@ -1,5 +1,7 @@
 import argparse
 import requests
+import json
+import sys
 from colorama import Fore, Style, init
 
 # Initialize colorama so ANSI escape sequences will work on all platforms.
@@ -19,7 +21,6 @@ def insert_cmd(node_addr, key, value):
         print()
 
 def query_cmd(node_addr, key):
-    # Using local_query endpoint for synchronous response
     url = f"http://{node_addr}/local_query"
     params = {"key": key}
     try:
@@ -45,53 +46,70 @@ def delete_cmd(node_addr, key):
         print(Fore.RED + "\n[Error during delete]" + Style.RESET_ALL, e)
         print()
 
-def join_cmd(node_addr, ip, port, node_id):
-    """
-    Sends a join request to the target node (which must be the bootstrap node).
-    The payload includes the joining node's ip, port, and id.
-    """
-    url = f"http://{node_addr}/join"
-    payload = {"ip": ip, "port": port, "id": node_id}
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        print(Fore.GREEN + "\n[Join successful]" + Style.RESET_ALL)
-        print(response.json())
-        print()  # blank line
-    except Exception as e:
-        print(Fore.RED + "\n[Error during join]" + Style.RESET_ALL, e)
-        print()
-
-def depart_cmd(node_addr):
-    """
-    Sends a depart request to the target node.
-    The node will handle its own graceful departure if it is not the bootstrap.
-    """
-    url = f"http://{node_addr}/depart"
-    try:
-        response = requests.post(url, json={})
-        response.raise_for_status()
-        print(Fore.GREEN + "\n[Depart successful]" + Style.RESET_ALL)
-        print(response.json())
-        print()  # blank line
-    except Exception as e:
-        print(Fore.RED + "\n[Error during depart]" + Style.RESET_ALL, e)
-        print()
-
 def overlay_cmd(node_addr):
     """
-    Retrieves the current overlay (ring) information by sending a GET request to the /overlay endpoint.
+    Retrieves and pretty-prints the overlay (ring) information.
     """
     url = f"http://{node_addr}/overlay"
     try:
         response = requests.get(url)
         response.raise_for_status()
         print(Fore.GREEN + "\n[Overlay info]" + Style.RESET_ALL)
-        print(response.json())
+        overlay_data = response.json()
+        formatted_data = json.dumps(overlay_data, indent=4)
+        print(formatted_data)
         print()  # blank line
     except Exception as e:
         print(Fore.RED + "\n[Error during overlay]" + Style.RESET_ALL, e)
         print()
+
+def depart_cmd(node_addr):
+    """
+    Sends a depart request to the target node and exits the client if the node departs gracefully.
+    """
+    url = f"http://{node_addr}/depart"
+    try:
+        response = requests.post(url, json={})
+        response.raise_for_status()
+        print(Fore.GREEN + "\n[Depart successful]" + Style.RESET_ALL)
+        departure_response = response.json()
+        print(departure_response)
+        print()  # blank line
+
+        # If the response contains the departure message, exit the client.
+        # Adjust this check according to your actual response format.
+        if isinstance(departure_response, dict):
+            message = departure_response.get("message", "").lower()
+        elif isinstance(departure_response, str):
+            message = departure_response.lower()
+        else:
+            message = ""
+
+        if "node departed gracefully" in message:
+            print(Fore.MAGENTA + "Exiting client." + Style.RESET_ALL)
+            sys.exit(0)
+        else:
+            # Optionally exit anyway after a successful depart.
+            sys.exit(0)
+    except Exception as e:
+        print(Fore.RED + "\n[Error during depart]" + Style.RESET_ALL, e)
+        print()
+
+def help_cmd():
+    """
+    Prints help information for all available commands.
+    """
+    help_text = """
+Available commands:
+    Insert <key> <value>  - Insert a key-value pair into the network.
+    Query <key>           - Retrieve the value associated with a given key.
+    Delete <key>          - Delete the key-value pair from the network.
+    Overlay               - Display the current network overlay (topology).
+    Depart                - Gracefully remove the node from the network and exit the client.
+    Help                  - Show this help message.
+    Exit                  - Quit the client.
+"""
+    print(Fore.CYAN + help_text + Style.RESET_ALL)
 
 def print_intro(node_addr):
     print(Fore.CYAN + f"Connected to node: http://{node_addr}" + Style.RESET_ALL)
@@ -99,9 +117,9 @@ def print_intro(node_addr):
     print("  Insert <key> <value>")
     print("  Query <key>")
     print("  Delete <key>")
-    print("  Join <ip> <port> <id>")
-    print("  Depart")
     print("  Overlay")
+    print("  Depart")
+    print("  Help")
     print(Fore.YELLOW + "Type 'Exit' to quit." + Style.RESET_ALL)
     print()
 
@@ -161,23 +179,6 @@ def main():
             key = tokens[1]
             delete_cmd(node_addr, key)
 
-        elif cmd == "join":
-            if len(tokens) != 4:
-                print(Fore.RED + "Usage: Join <ip> <port> <id>" + Style.RESET_ALL)
-                print()
-                continue
-            ip = tokens[1]
-            port = tokens[2]
-            node_id = tokens[3]
-            join_cmd(node_addr, ip, port, node_id)
-
-        elif cmd == "depart":
-            if len(tokens) != 1:
-                print(Fore.RED + "Usage: Depart" + Style.RESET_ALL)
-                print()
-                continue
-            depart_cmd(node_addr)
-
         elif cmd == "overlay":
             if len(tokens) != 1:
                 print(Fore.RED + "Usage: Overlay" + Style.RESET_ALL)
@@ -185,8 +186,19 @@ def main():
                 continue
             overlay_cmd(node_addr)
 
+        elif cmd == "depart":
+            if len(tokens) != 1:
+                print(Fore.RED + "Usage: Depart" + Style.RESET_ALL)
+                print()
+                continue
+            depart_cmd(node_addr)
+            # No need to continue in the loop since depart_cmd exits the client.
+
+        elif cmd == "help":
+            help_cmd()
+
         else:
-            print(Fore.RED + "Invalid command. Use Insert, Query, Delete, Join, Depart, or Overlay." + Style.RESET_ALL)
+            print(Fore.RED + "Invalid command. Use Insert, Query, Delete, Overlay, Depart, Help, or Exit." + Style.RESET_ALL)
             print()
 
 if __name__ == "__main__":
