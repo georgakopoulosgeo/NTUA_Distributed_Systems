@@ -57,7 +57,7 @@ class Node:
             event = threading.Event()
             self.pending_requests[request_id] = {"event": event, "result": None}
             origin = {"ip": self.ip, "port": self.port, "request_id": request_id}
-            print(f"[{self.ip}:{self.port}] Origin request: {origin}")
+            #print(f"[{self.ip}:{self.port}] Origin request: {origin}")
 
         key_hash = self.compute_hash(key)
         if self.is_responsible(key_hash):
@@ -68,7 +68,7 @@ class Node:
             else:
                 self.data_store[key] = value
                 msg = f"Key '{key}' inserted at node {self.ip}."
-            print(f"[{self.ip}:{self.port}] {msg}")
+            #print(f"[{self.ip}:{self.port}] {msg}")
 
             final_result = {
                 "result": True,
@@ -78,38 +78,45 @@ class Node:
             }
 
             # Replication step based on consistency mode
-            if self.replication_factor > 1:
-                if self.consistency_mode == "linearizability":
-                    # Synchronous chain replication
-                    replication_count = self.replication_factor - 1
-                    ack = self.chain_replicate_insert(key, value, replication_count)
-                    if not ack:
-                        final_result["result"] = False
-                        final_result["message"] += " Chain replication failed."
-                        print(f"[{self.ip}:{self.port}] Chain replication failed for key '{key}'.")
-                else:
-                    # Eventual consistency: asynchronous replication
-                    threading.Thread(target=self.async_replicate_insert, args=(key, value, self.replication_factor - 1)).start()
-
-            # If this node is the origin, return the final result directly.
-            if origin is None or (origin["ip"] == self.ip and origin["port"] == self.port):
-                # If the node is the origin, it would typically signal the waiting thread (if you use pending_requests)
-                # For simplicity, we return the final result here.
-                return final_result
+            if self.consistency_mode == "linearizability" and self.replication_factor > 1:
+                # Synchronous chain replication
+                replication_count = self.replication_factor - 1
+                ack = self.chain_replicate_insert(key, value, replication_count)
+                if not ack:
+                    final_result["result"] = False
+                    final_result["message"] += " Chain replication failed."
             else:
-                # If not the origin, send a callback to the origin node.
+                # Eventual consistency: trigger asynchronous replication if needed
+                if self.replication_factor > 1:
+                    threading.Thread(
+                        target=self.async_replicate_insert, 
+                        args=(key, value, self.replication_factor - 1)
+                    ).start()
+                # Always send a callback to signal the completion, regardless of replication_factor
                 callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
                 try:
                     requests.post(callback_url, json={
                         "request_id": origin["request_id"],
                         "final_result": final_result
                     }, timeout=2)
-                    print(f"[{self.ip}:{self.port}] Insert processed; callback sent to origin {origin['ip']}:{origin['port']}")
                 except Exception as e:
                     print(f"Error sending callback: {e}")
-                # Return an intermediate response.
                 return {"result": True, "message": "Insert processed; callback sent to origin."}
-
+            # If this node is the origin, return the final result directly.
+            if origin["ip"] == self.ip and origin["port"] == self.port:
+                return final_result
+            else:
+                # If not the origin, send a callback to the origin node (already sent in eventual consistency case)
+                if self.consistency_mode == "linearizability":
+                    callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
+                    try:
+                        requests.post(callback_url, json={
+                            "request_id": origin["request_id"],
+                            "final_result": final_result
+                        }, timeout=2)
+                    except Exception as e:
+                        print(f"Error sending callback: {e}")
+                return {"result": True, "message": "Insert processed; callback sent to origin."}
         else:
             # If this node is not responsible, forward the insert request to the successor.
             successor_ip = self.successor["ip"]
@@ -117,17 +124,17 @@ class Node:
             url = f"http://{successor_ip}:{successor_port}/insert"
             payload = {"key": key, "value": value, "origin": origin}
             try:
-                print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
+                #print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
                 requests.post(url, json=payload)
             except Exception as e:
                 return {"result": False, "error": f"Forwarding failed: {e}"}
-            return {"result": True, "message": "Insert forwarded."}
+            #return {"result": True, "message": "Insert forwarded."}
         
 
     def chain_replicate_insert(self, key: str, value: str, replication_count: int) -> bool:
         # Synchronously update local store
         self.data_store[key] = value
-        print(f"[{self.ip}:{self.port}] (Chain) Stored key '{key}' locally.")
+        #print(f"[{self.ip}:{self.port}] (Chain) Stored key '{key}' locally.")
 
         if replication_count > 0:
             successor_ip = self.successor["ip"]
@@ -139,7 +146,7 @@ class Node:
                 "replication_count": replication_count - 1
             }
             try:
-                print(f"[{self.ip}:{self.port}] Forwarding chain replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count}.")
+                #print(f"[{self.ip}:{self.port}] Forwarding chain replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count}.")
                 response = requests.post(url, json=payload, timeout=2)
                 if response.status_code == 200:
                     ack = response.json().get("ack", False)
@@ -159,10 +166,11 @@ class Node:
             url = f"http://{successor_ip}:{successor_port}/replicate_delete"
             payload = {"key": key, "replication_count": 0}
             try:
-                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
+                #print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
                 requests.post(url, json=payload, timeout=2)
             except Exception as e:
                 print(f"Error instructing deletion of stale replica: {e}")
+            return True # Maybe not necessary, but for clarity.
 
 
     def async_replicate_insert(self, key: str, value: str, replication_count: int):
