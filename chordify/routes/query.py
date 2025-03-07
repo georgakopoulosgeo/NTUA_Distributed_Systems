@@ -40,7 +40,7 @@ def query():
     if origin is None:
         req_id = list(node.pending_requests.keys())[-1]
         pending = node.pending_requests[req_id]
-        if pending["event"].wait(timeout=5):  # Wait up to 3 seconds
+        if pending["event"].wait(timeout=3):  # Wait up to 3 seconds
             final_result = pending["result"]
             del node.pending_requests[req_id]
             return jsonify(final_result), 200

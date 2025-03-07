@@ -19,6 +19,7 @@ class Node:
         self.predecessor = {} # Πληροφορίες για τον προηγούμενο κόμβο (αν χρειαστεί)
         self.data_store = {}   # Αποθήκη για τα key-value δεδομένα
         self.pending_requests = {} # Κρατάει τα αιτήματα που περιμένουν απάντηση
+        self.pending_requests_lock = threading.Lock()
         self.replica_store = {}  # New: storage for replicated key-value pairs.
         self.replication_factor = replication_factor  # Default replication factor k=1 (i.e. no extra copies). Set to 3, 5, etc. as needed.
         self.consistency_mode = consistency_mode
@@ -46,7 +47,7 @@ class Node:
 
 
 
-    def insert(self, key: str, value: str, origin: dict = None):
+    def insert(self, key: str, value: str, origin: dict = None) -> (dict, str): # type: ignore
         """
         If origin is None, we treat this node as the 'origin'.
         If not None, we forward or respond with a callback.
@@ -55,9 +56,15 @@ class Node:
             # Setup origin info for callback
             request_id = str(uuid.uuid4())
             event = threading.Event()
-            self.pending_requests[request_id] = {"event": event, "result": None}
+            # OLD: #self.pending_requests[request_id] = {"event": event, "result": None}
+            with self.pending_requests_lock:
+                self.pending_requests[request_id] = {"event": event, "result": None}
             origin = {"ip": self.ip, "port": self.port, "request_id": request_id}
-            #print(f"[{self.ip}:{self.port}] Origin request: {origin}")
+            is_origin = True
+            print(f"[{self.ip}:{self.port}] Origin request: {origin}")
+        else:
+            is_origin = False
+            request_id = origin.get("request_id")
 
         key_hash = self.compute_hash(key)
         if self.is_responsible(key_hash):
@@ -68,7 +75,7 @@ class Node:
             else:
                 self.data_store[key] = value
                 msg = f"Key '{key}' inserted at node {self.ip}."
-            #print(f"[{self.ip}:{self.port}] {msg}")
+            print(f"[{self.ip}:{self.port}] {msg}")
 
             final_result = {
                 "result": True,
@@ -95,28 +102,32 @@ class Node:
                 # Always send a callback to signal the completion, regardless of replication_factor
                 callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
                 try:
+                    print(f"[{self.ip}:{self.port}] Sending callback to origin {origin['ip']}:{origin['port']} with request_id {request_id}")
                     requests.post(callback_url, json={
                         "request_id": origin["request_id"],
                         "final_result": final_result
                     }, timeout=2)
                 except Exception as e:
                     print(f"Error sending callback: {e}")
-                return {"result": True, "message": "Insert processed; callback sent to origin."}
+                if not is_origin:
+                    return (final_result, None)
             # If this node is the origin, return the final result directly.
             if origin["ip"] == self.ip and origin["port"] == self.port:
-                return final_result
+                return (final_result, request_id)
             else:
                 # If not the origin, send a callback to the origin node (already sent in eventual consistency case)
                 if self.consistency_mode == "linearizability":
                     callback_url = f"http://{origin['ip']}:{origin['port']}/insert_response"
                     try:
+                        print(f"[{self.ip}:{self.port}] Sending callback to origin {origin['ip']}:{origin['port']} with request_id {request_id}")
                         requests.post(callback_url, json={
                             "request_id": origin["request_id"],
                             "final_result": final_result
                         }, timeout=2)
                     except Exception as e:
                         print(f"Error sending callback: {e}")
-                return {"result": True, "message": "Insert processed; callback sent to origin."}
+                # Callback sent, return None for request_id
+                return ({"result": True, "message": "Insert processed; callback sent to origin."}, request_id)
         else:
             # If this node is not responsible, forward the insert request to the successor.
             successor_ip = self.successor["ip"]
@@ -124,17 +135,20 @@ class Node:
             url = f"http://{successor_ip}:{successor_port}/insert"
             payload = {"key": key, "value": value, "origin": origin}
             try:
-                #print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
+                print(f"[{self.ip}:{self.port}] Forwarding insert request for key '{key}' (hash: {key_hash}) to successor {successor_ip}:{successor_port}.")
                 requests.post(url, json=payload)
             except Exception as e:
-                return {"result": False, "error": f"Forwarding failed: {e}"}
-            #return {"result": True, "message": "Insert forwarded."}
+                return ({"result": False, "error": f"Forwarding failed: {e}"}, request_id)
+            return ({"result": True, "message": "Insert forwarded."}, request_id)
         
 
     def chain_replicate_insert(self, key: str, value: str, replication_count: int) -> bool:
         # Synchronously update local store
-        self.data_store[key] = value
-        #print(f"[{self.ip}:{self.port}] (Chain) Stored key '{key}' locally.")
+        if key in self.replica_store:
+            self.replica_store[key] += f" | {value}"
+        else:
+            self.replica_store[key] = value
+        print(f"[{self.ip}:{self.port}] (Chain) Stored key '{key}' locally.")
 
         if replication_count > 0:
             successor_ip = self.successor["ip"]
@@ -146,7 +160,7 @@ class Node:
                 "replication_count": replication_count - 1
             }
             try:
-                #print(f"[{self.ip}:{self.port}] Forwarding chain replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count}.")
+                print(f"[{self.ip}:{self.port}] Forwarding chain replication for key '{key}' to {successor_ip}:{successor_port} with count {replication_count}.")
                 response = requests.post(url, json=payload, timeout=2)
                 if response.status_code == 200:
                     ack = response.json().get("ack", False)
@@ -161,6 +175,7 @@ class Node:
         else:
             # We are at the last valid replica in the new chain.
             # Instruct our successor to delete any stale replica of the key.
+            '''
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/replicate_delete"
@@ -170,10 +185,12 @@ class Node:
                 requests.post(url, json=payload, timeout=2)
             except Exception as e:
                 print(f"Error instructing deletion of stale replica: {e}")
+            '''
+            print(f"[{self.ip}:{self.port}] Chain replication for key '{key}' completed.")
             return True # Maybe not necessary, but for clarity.
 
 
-    def async_replicate_insert(self, key: str, value: str, replication_count: int):
+    def async_replicate_insert(self, key: str, value: str, replication_count: int, from_new_join: bool = False):
     # Store in replica store (update if exists)
         if key in self.replica_store:
             self.replica_store[key] += f" | {value}"
@@ -194,15 +211,18 @@ class Node:
                 print(f"Error in async replication: {e}")
         else:
             # When replication_count is 0, instruct the successor to delete any stale replica.
-            successor_ip = self.successor["ip"]
-            successor_port = self.successor["port"]
-            url = f"http://{successor_ip}:{successor_port}/replicate_delete"
-            payload = {"key": key, "replication_count": 0}
-            try:
-                print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
-                requests.post(url, json=payload, timeout=2)
-            except Exception as e:
-                print(f"Error instructing deletion of stale replica: {e}")
+            if from_new_join:
+                successor_ip = self.successor["ip"]
+                successor_port = self.successor["port"]
+                url = f"http://{successor_ip}:{successor_port}/replicate_delete"
+                payload = {"key": key, "replication_count": 0}
+                try:
+                    print(f"[{self.ip}:{self.port}] Instructing {successor_ip}:{successor_port} to delete stale replica for key '{key}'.")
+                    requests.post(url, json=payload, timeout=2)
+                except Exception as e:
+                    print(f"Error instructing deletion of stale replica: {e}")
+            else:
+                print(f"[{self.ip}:{self.port}] Asynchronous replication for key '{key}' completed.")
 
     '''
     def replicate_insert(self, key: str, value: str, replication_count: int):
@@ -460,6 +480,7 @@ class Node:
             print(f"[{self.ip}:{self.port}] Deleted replica for key '{key}'.")
         else:
             print(f"[{self.ip}:{self.port}] No replica for key '{key}' found to delete.")
+            return False
 
         # Forward the deletion replication if further replicas need updating.
         if replication_count > 0:
@@ -475,6 +496,9 @@ class Node:
                 requests.post(url, json=payload, timeout=2)
             except Exception as e:
                 print(f"[{self.ip}:{self.port}] Error forwarding delete replication: {e}")
+        else:
+            print(f"[{self.ip}:{self.port}] Replication deletion for key '{key}' completed.")
+            return True
 
 
     def join(self, bootstrap_ip, bootstrap_port):

@@ -4,6 +4,7 @@ import time
 from flask import Blueprint, request, jsonify, current_app
 import hashlib
 import requests
+import os
 import threading
 
 insert_bp = Blueprint('data', __name__)
@@ -46,24 +47,22 @@ def insert():
     value = data.get("value")
     origin = data.get("origin")  # might be None or might exist
 
-    response = node.insert(key, value, origin)
+    response, req_id = node.insert(key, value, origin)
     
     # The Origin Node Must Block (or otherwise wait) for the final callback
     if origin is None:
-        # Origin Node sets up a “pending request” so that it can block the HTTP response until the final result arrives from the responsible node.
-        req_id = list(node.pending_requests.keys())[-1]
-        #print(f"Pending Requests: {node.pending_requests}")  # Debug line
-        pending = node.pending_requests[req_id]
-        
-        if pending["event"].wait(timeout=5):  # 3-second wait
-            # The final result should be in the pending dict
+        with node.pending_requests_lock:
+            pending = node.pending_requests.get(req_id)
+        print(f"insert_response called in process {os.getpid()}, node object at {hex(id(node))}, req_id={req_id}")
+        if pending and pending["event"].wait(timeout=5):  # increased timeout
             final_result = pending["result"]
-            # cleanup
-            del node.pending_requests[req_id]
+            with node.pending_requests_lock:
+                del node.pending_requests[req_id]
             return jsonify(final_result), 200
         else:
-            # Timeout
-            del node.pending_requests[req_id]
+            with node.pending_requests_lock:
+                if req_id in node.pending_requests:
+                    del node.pending_requests[req_id]
             return jsonify({"result": False, "error": "Timeout waiting for final node callback"}), 504
     else:
         # If not the origin node, return the response to the predecessor node
@@ -79,11 +78,13 @@ def insert_response():
     req_id = data.get("request_id")
     final_result = data.get("final_result")
     #print(f"Received insert response for request_id {req_id}")
-
+    print(f"insert_response called in process {os.getpid()}, node object at {hex(id(node))}, req_id={req_id}")
     # if the request_id exists in the pending_requests dict of the node instance then set the result and event
+    print(f"Received insert response for request_id {req_id}")  # Debug
     if req_id in node.pending_requests:
         node.pending_requests[req_id]["result"] = final_result
         node.pending_requests[req_id]["event"].set()
+        print(f"Callback processed successfully for {req_id}")  # Debug
         #print(f"Callback processed successfully for {req_id}")  # Debug
         return jsonify({"result": True, "message": "Callback received."}), 200
     else:

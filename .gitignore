@@ -1,0 +1,3 @@
+# Ignore Python cache directories
+chordify/__pycache__/
+chordify/routes/__pycache__/

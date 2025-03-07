@@ -12,7 +12,6 @@ services:
     environment:
       - IP=0.0.0.0
       - PORT=8000
-      - FLASK_ENV=development
       - FLASK_DEBUG=1
       - PYTHONUNBUFFERED=1
     ports:
@@ -36,7 +35,6 @@ services:
     environment:
       - IP=node1
       - PORT=8001
-      - FLASK_ENV=development
       - FLASK_DEBUG=1
       - PYTHONUNBUFFERED=1
     ports:
@@ -59,7 +57,6 @@ services:
     environment:
       - IP=node2
       - PORT=8002
-      - FLASK_ENV=development
       - FLASK_DEBUG=1
       - PYTHONUNBUFFERED=1
     ports:
@@ -82,7 +79,6 @@ services:
     environment:
       - IP=node3
       - PORT=8003
-      - FLASK_ENV=development
       - FLASK_DEBUG=1
       - PYTHONUNBUFFERED=1
     ports:
@@ -105,7 +101,6 @@ services:
     environment:
       - IP=node4
       - PORT=8004
-      - FLASK_ENV=development
       - FLASK_DEBUG=1
       - PYTHONUNBUFFERED=1
     ports:
