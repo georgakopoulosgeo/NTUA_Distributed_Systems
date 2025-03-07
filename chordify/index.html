@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Distributed Systems Client</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Distributed Systems Client</h1>
+    <div class="form-section">
+      <label for="nodeAddress">Node Address (ip:port):</label>
+      <input type="text" id="nodeAddress" placeholder="e.g., 127.0.0.1:8001" />
+    </div>
+    <div class="form-section">
+      <h2>Insert</h2>
+      <label for="insertKey">Key:</label>
+      <input type="text" id="insertKey" />
+      <label for="insertValue">Value:</label>
+      <textarea id="insertValue"></textarea>
+      <button class="btn" onclick="handleInsert()">Insert</button>
+    </div>
+    <div class="form-section">
+      <h2>Query</h2>
+      <label for="queryKey">Key:</label>
+      <input type="text" id="queryKey" />
+      <button class="btn" onclick="handleQuery()">Query</button>
+    </div>
+    <div class="form-section">
+      <h2>Delete</h2>
+      <label for="deleteKey">Key:</label>
+      <input type="text" id="deleteKey" />
+      <button class="btn" onclick="handleDelete()">Delete</button>
+    </div>
+    <div class="form-section">
+      <h2>Join</h2>
+      <label for="joinIp">IP:</label>
+      <input type="text" id="joinIp" />
+      <label for="joinPort">Port:</label>
+      <input type="text" id="joinPort" />
+      <label for="joinId">Node ID:</label>
+      <input type="text" id="joinId" />
+      <button class="btn" onclick="handleJoin()">Join</button>
+    </div>
+    <div class="form-section">
+      <h2>Depart</h2>
+      <button class="btn" onclick="handleDepart()">Depart</button>
+    </div>
+    <div class="form-section">
+      <h2>Overlay</h2>
+      <button class="btn" onclick="handleOverlay()">Overlay</button>
+    </div>
+    <div class="form-section">
+      <h2>Result</h2>
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <script>
+    function getNodeAddress() {
+      return document.getElementById('nodeAddress').value.trim();
+    }
+
+    function displayResult(data) {
+      document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function displayError(error) {
+      document.getElementById('result').textContent = 'Error: ' + error;
+    }
+
+    function handleInsert() {
+      const node = getNodeAddress();
+      const key = document.getElementById('insertKey').value.trim();
+      const value = document.getElementById('insertValue').value.trim();
+      if (!node || !key || !value) {
+        alert('Please fill out all fields for Insert.');
+        return;
+      }
+      fetch(`http://${node}/insert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value })
+      })
+      .then(response => response.json())
+      .then(data => displayResult(data))
+      .catch(err => displayError(err));
+    }
+
+    function handleQuery() {
+      const node = getNodeAddress();
+      const key = document.getElementById('queryKey').value.trim();
+      if (!node || !key) {
+        alert('Please fill out all fields for Query.');
+        return;
+      }
+      fetch(`http://${node}/local_query?key=${encodeURIComponent(key)}`)
+      .then(response => response.json())
+      .then(data => displayResult(data))
+      .catch(err => displayError(err));
+    }
+
+    function handleDelete() {
+      const node = getNodeAddress();
+      const key = document.getElementById('deleteKey').value.trim();
+      if (!node || !key) {
+        alert('Please fill out all fields for Delete.');
+        return;
+      }
+      fetch(`http://${node}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      })
+      .then(response => response.json())
+      .then(data => displayResult(data))
+      .catch(err => displayError(err));
+    }
+
+    function handleJoin() {
+      const node = getNodeAddress();
+      const ip = document.getElementById('joinIp').value.trim();
+      const port = document.getElementById('joinPort').value.trim();
+      const id = document.getElementById('joinId').value.trim();
+      if (!node || !ip || !port || !id) {
+        alert('Please fill out all fields for Join.');
+        return;
+      }
+      fetch(`http://${node}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, port, id })
+      })
+      .then(response => response.json())
+      .then(data => displayResult(data))
+      .catch(err => displayError(err));
+    }
+
+    function handleDepart() {
+      const node = getNodeAddress();
+      if (!node) {
+        alert('Please enter the Node Address.');
+        return;
+      }
+      fetch(`http://${node}/depart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+      .then(response => response.json())
+      .then(data => displayResult(data))
+      .catch(err => displayError(err));
+    }
+
+    function handleOverlay() {
+      const node = getNodeAddress();
+      if (!node) {
+        alert('Please enter the Node Address.');
+        return;
+      }
+      fetch(`http://${node}/overlay`)
+      .then(response => response.json())
+      .then(data => displayResult(data))
+      .catch(err => displayError(err));
+    }
+  </script>
+</body>
+</html>
