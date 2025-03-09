@@ -136,6 +136,16 @@ def main():
     args = parser.parse_args()
     node_addr = args.node
 
+    # --- Health Check: ensure the node is reachable and responding ---
+    try:
+        url = f"http://{node_addr}/overlay"
+        response = requests.get(url, timeout=2)
+        response.raise_for_status()
+    except Exception as e:
+        print(Fore.RED + f"\n[Error] Unable to connect to node at {node_addr}. Node is not part of the system.")
+        sys.exit(1)
+    # ----------------------------------------------------------------
+
     print_intro(node_addr)
 
     while True:
@@ -192,7 +202,7 @@ def main():
                 print()
                 continue
             depart_cmd(node_addr)
-            # No need to continue in the loop since depart_cmd exits the client.
+            # depart_cmd will call sys.exit(0) if it succeeds, so we won't reach here.
 
         elif cmd == "help":
             help_cmd()
