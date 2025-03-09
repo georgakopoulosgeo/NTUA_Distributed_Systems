@@ -30,7 +30,7 @@ def _start_inserts_on_node(node_addr, file_number, results, index):
     start_time = time.time()
 
     try:
-        r = requests.post(url, json=payload, timeout=120)
+        r = requests.post(url, json=payload, timeout=248)
         r.raise_for_status()
         data = r.json()  # e.g. {"status":"done","inserted":..., "time_seconds":...}
         end_time = time.time()
@@ -108,7 +108,8 @@ def run_distributed_insert_experiment(bootstrap_addr, num_nodes=5):
         else:
             print(f"[{res['node']}] file_number={res['file_number']} => "
                   f"node_response={res['node_response']}, "
-                  f"request_duration={res['request_duration']}s")
+                  f"request_duration={res['request_duration']}s, "
+                  f"write throughput={res['node_response']['inserted'] / res['request_duration']:.2f} ops/sec")
     print("==============================================")
 
 

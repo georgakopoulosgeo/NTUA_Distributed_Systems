@@ -32,20 +32,26 @@ def query():
             origin = f"{node.ip}:{node.port}"
         #print(f"[{node.ip}:{node.port}] Processing wildcard query with origin {origin}")
         all_songs = node.query_wildcard(origin)
+        # Add last line in dictionary the number of songs
+        all_songs["songs_count"] = len(all_songs)
         return jsonify({"all_songs": all_songs}), 200
 
-    result = node.query(key, origin, chain_count)
+    result , req_id = node.query(key, origin, chain_count)
 
     # If this node is the original requester, wait for the query callback.
     if origin is None:
-        req_id = list(node.pending_requests.keys())[-1]
-        pending = node.pending_requests[req_id]
-        if pending["event"].wait(timeout=3):  # Wait up to 3 seconds
+        # Wait on the event for the specific pending request.
+        with node.pending_requests_lock:
+            pending = node.pending_requests.get(req_id)
+        if pending and pending["event"].wait(timeout=3):
             final_result = pending["result"]
-            del node.pending_requests[req_id]
+            with node.pending_requests_lock:
+                del node.pending_requests[req_id]
             return jsonify(final_result), 200
         else:
-            del node.pending_requests[req_id]
+            with node.pending_requests_lock:
+                if req_id in node.pending_requests:
+                    del node.pending_requests[req_id]
             return jsonify({"result": False, "error": "Timeout waiting for final node callback"}), 504
     else:
         # If this request was forwarded, return the immediate response.
@@ -90,10 +96,7 @@ def local_query():
 def start_queries():
     data = request.get_json()
     file_number = data.get("file_number", "00")  # default file_number if not provided
-
-    # Build an absolute path relative to this file’s location
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, "..", "expirements", "query", f"query_{file_number}.txt")
+    file_path = f"./expirements/queries/query_{file_number}.txt"
 
     node = current_app.config["NODE"]
     port = node.port
@@ -115,17 +118,18 @@ def start_queries():
         try:
             # Here we call the query endpoint locally on the same node.
             # Adjust the endpoint path if needed (for example, it might be /local_query).
-            response = requests.get(f"http://127.0.0.1:{port}/query", params={"key": key})
+            response = requests.get(f"http://127.0.0.1:{port}/query?key={key}")
             response.raise_for_status()
             result = response.json()
             results.append({"key": key, "result": result})
         except Exception as e:
             results.append({"key": key, "error": str(e)})
     duration = time.time() - start_time
-
+    throughput = len(keys) / duration if duration > 0 else 0
     return jsonify({
         "status": "done",
         "queried": len(keys),
         "time_seconds": round(duration, 2),
+        "throughput": round(throughput, 2),  # new field for read throughput
         "results": results
     }), 200

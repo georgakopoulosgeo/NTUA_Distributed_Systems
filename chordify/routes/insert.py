@@ -53,8 +53,8 @@ def insert():
     if origin is None:
         with node.pending_requests_lock:
             pending = node.pending_requests.get(req_id)
-        print(f"insert_response called in process {os.getpid()}, node object at {hex(id(node))}, req_id={req_id}")
-        if pending and pending["event"].wait(timeout=5):  # increased timeout
+        #print(f"insert_response called in process {os.getpid()}, node object at {hex(id(node))}, req_id={req_id}")
+        if pending and pending["event"].wait(timeout=20):  # increased timeout
             final_result = pending["result"]
             with node.pending_requests_lock:
                 del node.pending_requests[req_id]
@@ -80,7 +80,7 @@ def insert_response():
     #print(f"Received insert response for request_id {req_id}")
     print(f"insert_response called in process {os.getpid()}, node object at {hex(id(node))}, req_id={req_id}")
     # if the request_id exists in the pending_requests dict of the node instance then set the result and event
-    print(f"Received insert response for request_id {req_id}")  # Debug
+    #print(f"Received insert response for request_id {req_id}")  # Debug
     if req_id in node.pending_requests:
         node.pending_requests[req_id]["result"] = final_result
         node.pending_requests[req_id]["event"].set()
@@ -121,8 +121,10 @@ def chain_replicate_insert():
     key = data.get("key")
     value = data.get("value")
     replication_count = data.get("replication_count", 0)
+    origin = data.get("origin")
+    final_result = data.get("final_result")
     # Call the node's chain_replicate_insert method.
-    node.chain_replicate_insert(key, value, replication_count)
+    node.chain_replicate_insert(key, value, replication_count, origin, final_result)
     return jsonify({"ack":True, "result": True, "message": "Chain replication step processed."}), 200
 
 @insert_bp.route("/start_inserts", methods=["POST"])
