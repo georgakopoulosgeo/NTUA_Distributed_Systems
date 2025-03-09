@@ -59,7 +59,9 @@ if __name__ == '__main__':
                 "predecessor": {}
             }
         # This ensures the ring has at least the bootstrap node
-        node.replication_factor = 5
+        node.replication_factor = 3
+        #node.consistency_mode = "eventual"
+        node.consistency_mode = "linearizability"
         app.config['RING'] = [bootstrap_info]
 
     # Optionally, set the node instance in app.config or a dedicated module so that

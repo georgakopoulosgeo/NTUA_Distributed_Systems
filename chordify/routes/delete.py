@@ -21,7 +21,9 @@ def delete():
         # The origin node waits for the callback with the final result.
         req_id = list(node.pending_requests.keys())[-1]
         pending = node.pending_requests[req_id]
-        if pending["event"].wait(timeout=3):  # Wait up to 3 seconds
+
+        # Wait for up to 3 seconds for the responsible node to callback
+        if pending["event"].wait(timeout=3):
             final_result = pending["result"]
             del node.pending_requests[req_id]
             return jsonify(final_result), 200

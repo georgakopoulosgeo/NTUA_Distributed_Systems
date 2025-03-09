@@ -3,26 +3,29 @@ import threading
 import time
 
 def get_overlay(bootstrap_addr):
-    """
-    Fetches the overlay (ring info) from the given bootstrap node.
-    Expected JSON format:
-      { "ring": [ { "id": ..., "entryIp": ..., "port": ... }, ... ] }
-    """
     url = f"http://{bootstrap_addr}/overlay"
     resp = requests.get(url)
     resp.raise_for_status()
     return resp.json()
 
+def get_info(bootstrap_addr):
+    url = f"http://{bootstrap_addr}/nodeinfo"
+    resp = requests.get(url)
+    resp.raise_for_status()
+    data = resp.json()
+    return {
+        "replication_factor": data.get("replication_factor"),
+        "consistency_mode": data.get("consistency_mode")
+    }
+
 def _start_queries_on_node(node_addr, file_number, results, index):
-    """
-    Thread worker that POSTs to /start_queries on node_addr with the given file_number.
-    Stores the result (or error) in results[index].
-    """
+    # Thread worker that POSTs to /start_queries on node_addr with the given file_number.
+    # Stores the result (or error) in results[index].
     url = f"http://{node_addr}/start_queries"
     payload = {"file_number": file_number}
     start_time = time.time()
     try:
-        r = requests.post(url, json=payload, timeout=60)
+        r = requests.post(url, json=payload, timeout=120)
         r.raise_for_status()
         data = r.json()  # Expected to include "status", "queried", "time_seconds", etc.
         end_time = time.time()
@@ -52,6 +55,10 @@ def run_distributed_query_experiment(bootstrap_addr, num_nodes=5):
     """
     overlay_data = get_overlay(bootstrap_addr)
     ring = overlay_data.get("ring", [])
+
+    system_info = get_info(bootstrap_addr)
+    replication_factor = system_info.get("replication_factor")
+    consistency_mode = system_info.get("consistency_mode")
 
     if len(ring) < num_nodes:
         print(f"Overlay only has {len(ring)} nodes, but we need {num_nodes}. Aborting.")
@@ -84,13 +91,15 @@ def run_distributed_query_experiment(bootstrap_addr, num_nodes=5):
         t.join()
 
     print("=== Distributed Query Experiment Results ===")
+    print(f"Replication Factor: {replication_factor}, Consistency Mode: {consistency_mode}")
     for res in results:
         if "error" in res:
             print(f"[{res['node']}] file_number={res['file_number']} => ERROR: {res['error']}")
         else:
             print(f"[{res['node']}] file_number={res['file_number']} => "
-                  f"node_response={res['node_response']}, "
-                  f"request_duration={res['request_duration']}s")
+                  f"queried={res['node_response']['queried']} "
+                  f"time_seconds={res['node_response']['time_seconds']} "
+                  f"read throughput={res['node_response']['queried'] / res['node_response']['time_seconds']:.2f}")
     print("==============================================")
 
 if __name__ == "__main__":
