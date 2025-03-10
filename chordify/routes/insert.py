@@ -36,25 +36,22 @@ def compute_hash(key):
 
 @insert_bp.route("/insert", methods=["POST"])
 def insert():
-    '''
-    When a client calls a node’s /insert endpoint (with no "origin" field in the JSON), that node (the “origin node”) will either 
-    handle the insert itself (if it is responsible for that key) or forward it around the ring. Then, once the responsible node actually 
-    inserts the key, it sends a callback directly back to the origin node, so that the origin node can finally return the final result to the client.
-    '''
+    # First take the data from the request
     node = current_app.config["NODE"]
     data = request.get_json()
     key = data.get("key")
     value = data.get("value")
     origin = data.get("origin")  # might be None or might exist
 
+    # Call the node's insert method
     response, req_id = node.insert(key, value, origin)
     
-    # The Origin Node Must Block (or otherwise wait) for the final callback
+    # The Origin Node must block (or otherwise wait) for the final callback
     if origin is None:
         with node.pending_requests_lock:
             pending = node.pending_requests.get(req_id)
         #print(f"insert_response called in process {os.getpid()}, node object at {hex(id(node))}, req_id={req_id}")
-        if pending and pending["event"].wait(timeout=20):  # increased timeout
+        if pending and pending["event"].wait(timeout=20):  # Originally 3secs
             final_result = pending["result"]
             with node.pending_requests_lock:
                 del node.pending_requests[req_id]
@@ -93,12 +90,8 @@ def insert_response():
     
 @insert_bp.route("/async_replicate_insert", methods=["POST"])
 def async_replicate_insert():
-    """
-    This endpoint receives replication requests. It expects a JSON payload with:
-       - key: the key to replicate
-       - value: the associated value
-       - replication_count: the number of additional replicas to create
-    """
+    # This endpoint receives replication requests. 
+    # Responsible if the consistency mode is "eventual"
     node = current_app.config["NODE"]
     data = request.get_json()
     key = data.get("key")
@@ -110,12 +103,8 @@ def async_replicate_insert():
 
 @insert_bp.route("/chain_replicate_insert", methods=["POST"])
 def chain_replicate_insert():
-    """
-    This endpoint receives chain replication requests. It expects a JSON payload with:
-       - key: the key to replicate
-       - value: the associated value
-       - replication_count: the number of additional replicas to create
-    """
+    # This endpoint receives chain replication requests.
+    # Responsible if the consistency mode is "strong" / "linearizability
     node = current_app.config["NODE"]
     data = request.get_json()
     key = data.get("key")
@@ -129,13 +118,15 @@ def chain_replicate_insert():
 
 @insert_bp.route("/start_inserts", methods=["POST"])
 def start_inserts():
+    # This endpoint is used to start the inserts from a file.
+    # Used for the 1st experiment.
     data = request.get_json()
     file_number = data.get("file_number", "00")  # default if missing
     file_path = f"./expirements/insert/insert_{file_number}_part.txt"
     node = current_app.config["NODE"]
     port = node.port
 
-    # Read lines
+    # Read lines 
     try:
         with open(file_path, "r") as f:
             lines = [line.strip() for line in f if line.strip()]
@@ -148,9 +139,7 @@ def start_inserts():
     start_time = time.time()
     # Perform the actual inserts
     for key in lines:
-        # Either a direct local insert(key, value) or:
-        requests.post(f"http://127.0.0.1:{port}/insert",
-                      json={"key": key, "value": f"value_from_{file_number}"})
+        requests.post(f"http://127.0.0.1:{port}/insert",json={"key": key, "value": f"value_from_{file_number}"})
     duration = time.time() - start_time
 
     return jsonify({

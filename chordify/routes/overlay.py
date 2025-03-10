@@ -4,6 +4,7 @@ import requests
 
 overlay_bp = Blueprint('overlay', __name__)
 
+# The overlay route is used to retrieve the current state of the overlay network.
 @overlay_bp.route("/overlay", methods=["GET"])
 def overlay():
     node = current_app.config['NODE']
@@ -28,9 +29,12 @@ def overlay():
             if response.status_code == 200:
                 return response.json(), 200
             else:
-                return jsonify({"error": "Δεν ήταν δυνατή η λήψη του overlay"}), 500
+                return jsonify({"error": "Failed to retrieve overlay information from bootstrap node"}), 500
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+# The following routes are added during the testing phase of the project in the AWS environment, in order to execute all the necessary experiments without the need to manually update the settings of each node.
+# To do that we simply delete all the songs from the nodes and then update the settings of the nodes.
 
 @overlay_bp.route("/update_settings", methods=["POST"])
 def update_settings():
@@ -99,6 +103,7 @@ def update_settings():
 
 @overlay_bp.route("/update_config", methods=["POST"])
 def update_config():
+    # This route is used by the bootstrap node to update the configuration settings of a node.
     node = current_app.config['NODE']
     data = request.get_json()
     new_replication_factor = data.get("replication_factor")

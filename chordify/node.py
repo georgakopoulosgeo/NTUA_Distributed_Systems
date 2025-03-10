@@ -3,7 +3,11 @@ import requests
 import threading
 import uuid
 import time
-# import replication 
+
+# This class represents a node in the DHT ring.
+# Here we implement the main methods for the node to interact with the ring.
+# The node can insert, query, delete, join and depart from the ring.
+# We also implemented helper methods for replication and consistency, as well as methods for taking node info or updating its fields. 
 
 class Node:
     def __init__(self, ip, port, is_bootstrap=False, consistency_mode="strong", replication_factor=1):
@@ -20,30 +24,30 @@ class Node:
         self.replication_factor = replication_factor #Replication factor for the node
         self.consistency_mode = consistency_mode #Consistency mode for the node
 
+    # Compute the hash of a keys
     def compute_hash(self, key):
-        # Υπολογισμός του SHA1 hash ενός string και επιστροφή ως ακέραιος.
         h = hashlib.sha1(key.encode('utf-8')).hexdigest()
         return int(h, 16)
 
+    # Update the node's successor and predecessor
     def update_neighbors(self, successor, predecessor):
-        # Ενημέρωση των δεδομένων για τον successor και τον predecessor.
         self.successor = successor
         self.predecessor = predecessor
     
+    # Update the node's consistency mode and replication factor
     def update_replication_consistency(self, replication_factor, consistency):
-        # Ενημέρωση του replication factor και του consistency mode.
         self.replication_factor = replication_factor
         self.consistency_mode = consistency
 
+    # Check if the node is responsible for a key
     def is_responsible(self, key_hash: int) -> bool:
         if self.is_bootstrap:
             return key_hash > self.predecessor["id"]
         else:
             return self.predecessor["id"] < key_hash <= self.id
 
-
+    # Main method for inserting a key-value pair into the DHT.
     def insert(self, key: str, value: str, origin: dict = None) -> (dict, str):  # type: ignore
-        # Main method for inserting a key-value pair into the DHT.
         if origin is None:
             # If there is no origin, this node is the original requester.
             # Initialize a request_id and event for the pending request.
@@ -119,9 +123,8 @@ class Node:
                 return ({"result": False, "error": f"Forwarding failed: {e}"}, request_id)
             return ({"result": True, "message": "Insert forwarded."}, request_id)
 
-
+    # Performs synchronous chain replication for linearizability.
     def chain_replicate_insert(self, key: str, value: str, replication_count: int, origin: dict, final_result: dict) -> None:
-        # Performs synchronous chain replication for linearizability.
         if key not in self.data_store: # The node that is responsible for the key should not have a stale replica.
             if key in self.replica_store:
                 self.replica_store[key] += f" | {value}"
@@ -164,9 +167,8 @@ class Node:
                 print(f"Error sending callback: {e}")
             print(f"[{self.ip}:{self.port}] Chain replication for key '{key}' completed.")
 
-
+    # Performs asynchronous replication for eventual consistency.
     def async_replicate_insert(self, key: str, value: str, replication_count: int, from_new_join: bool = False):
-        # Performs asynchronous replication for eventual consistency.
         # time.sleep(0.3)  # Simulate a delay in the replication process.
         if key not in self.data_store: # The node that is responsible for the key should not have a stale replica.
             if key in self.replica_store:
@@ -201,7 +203,7 @@ class Node:
             else:
                 print(f"[{self.ip}:{self.port}] Asynchronous replication for key '{key}' completed.")
 
-                
+    # Main method for querying a key-value pair from the DHT.
     def query(self, key: str, origin: dict = None, chain_count: int = None) -> (dict, str): # type: ignore
         # 1. If no origin is provided, this node is the original requester
         if origin is None:
@@ -254,7 +256,7 @@ class Node:
             # Eventual consistency -> just do local read
             return self._return_local_or_callback(key, origin)
 
-
+    # Helper method for handling query requests in linearizability mode.
     def _handle_query_linearizability(self, key: str, origin: dict, chain_count: int) -> (dict, str): # type: ignore
         req_id = origin["request_id"]
         if chain_count > 0:
@@ -276,6 +278,7 @@ class Node:
             # When chain_count reaches 0, we are the tail -> return local or callback
             return self._return_local_or_callback(key, origin)
     
+    # Helper method for handling query requests in eventual consistency mode.
     def _handle_query_eventual(self, key: str, origin: dict) -> (dict, str): # type: ignore
         # Check if the key exists in either the primary or replica store.
         req_id = origin["request_id"]
@@ -302,8 +305,7 @@ class Node:
                 return ({"result": False, "error": f"Eventual consistency forward error: {e}"}, req_id)
             return ({"result": True, "message": "Eventual query forwarded."}, req_id)
 
-
-
+    # Helper method for returning the local result or sending a callback.
     def _return_local_or_callback(self, key: str, origin: dict) -> (dict, str): # type: ignore
         local_value = self.data_store.get(key, self.replica_store.get(key, None))
         responding_node = f"{self.ip}:{self.port}"
@@ -356,14 +358,9 @@ class Node:
             return (result, req_id)
     
             
-
-           
+    # Corner case: If we need all the songs in the DHT ring, we can use a wildcard query.
+    # Go to each node in the ring and collect all the songs.
     def query_wildcard(self, origin=None):
-        """
-        Aggregates all key-value pairs in the DHT ring for a wildcard '*' query.
-        The 'origin' parameter is a string (ip:port) set by the initiating node.
-        Aggregation stops when the query reaches back to the origin.
-        """
         my_id = f"{self.ip}:{self.port}"
         if origin is None:
             origin = my_id
@@ -397,12 +394,8 @@ class Node:
         merged_data.update(successor_data)
         return merged_data
     
+    # Main method for deleting a key-value pair from the DHT.
     def delete(self, key: str, origin: dict = None):
-        """
-        Delete a key (song) from the node.  
-        If origin is None, this node is the origin and sets up a pending request.  
-        Otherwise, the request is being forwarded.
-        """
         if origin is None:
             # This node is the origin
             request_id = str(uuid.uuid4())
@@ -623,14 +616,10 @@ class Node:
             except Exception as e:
                 print("Error pulling neighbors:", e)
                 return False
-            
+
+    # Method for gracefully departing from the ring.            
     def depart(self):
-        """
-        1. Notifies the predecessor and successor to update their neighbor pointers.
-        2. Transfers all keys (from data_store) to the successor.
-        3. Cleans up local data.
-        4. Notifies the bootstrap to remove this node from the ring.
-        """
+        # If this is the bootstrap node, it cannot depart.
         if self.is_bootstrap:
             print("Bootstrap node does not depart.")
             return False
