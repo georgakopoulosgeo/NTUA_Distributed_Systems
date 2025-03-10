@@ -21,6 +21,10 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8001/delete" `
   -Headers @{ "Content-Type" = "application/json" } `
   -Body '{"key": "song1"}'
 
+(Invoke-WebRequest -Uri "http://127.0.0.1:8001/overlay" -Method GET).Content
+
+Invoke-WebRequest -Uri http://localhost:8001/depart -Method POST
+
 
 ///// Docker compose yml
 sudo docker-compose build

@@ -604,45 +604,44 @@ class Node:
             
     def depart(self):
         """
-        1. Notifies only the predecessor and successor to update their neighbor pointers.
-        2. Transfers all keys (from data_store) to the successor so that the successor becomes
-        the new primary for these keys.
-        3. The successor, on absorbing these keys, re-initiates the replication chain, which also
-        cleans up any stale replicas from further down the ring.
+        1. Notifies the predecessor and successor to update their neighbor pointers.
+        2. Transfers all keys (from data_store) to the successor.
+        3. Cleans up local data.
+        4. Notifies the bootstrap to remove this node from the ring.
         """
         if self.is_bootstrap:
             print("Bootstrap node does not depart.")
             return False
 
-        # Notify predecessor: its new successor should be our successor.
+        # Notify predecessor: update its successor pointer.
         try:
             pred_ip = self.predecessor["ip"]
             pred_port = self.predecessor["port"]
             url = f"http://{pred_ip}:{pred_port}/update_neighbors"
             payload = {
-                "successor": self.successor,  # predecessor's successor becomes our successor
-                "predecessor": self.predecessor.get("predecessor", {})  # remain unchanged or as applicable
+                "successor": self.successor,  # Predecessor's new successor becomes our successor.
+                "predecessor": self.predecessor.get("predecessor", {})
             }
             requests.post(url, json=payload)
             print(f"[{self.ip}:{self.port}] Notified predecessor at {pred_ip}:{pred_port}.")
         except Exception as e:
             print(f"Error updating predecessor: {e}")
 
-        # Notify successor: its new predecessor should be our predecessor.
+        # Notify successor: update its predecessor pointer.
         try:
             succ_ip = self.successor["ip"]
             succ_port = self.successor["port"]
             url = f"http://{succ_ip}:{succ_port}/update_neighbors"
             payload = {
-                "successor": self.successor.get("successor", {}),  # may be updated later by the successor itself
-                "predecessor": self.predecessor  # new predecessor for successor becomes our predecessor
+                "successor": self.successor.get("successor", {}),
+                "predecessor": self.predecessor  # New predecessor for successor becomes our predecessor.
             }
             requests.post(url, json=payload)
             print(f"[{self.ip}:{self.port}] Notified successor at {succ_ip}:{succ_port}.")
         except Exception as e:
             print(f"Error updating successor: {e}")
 
-        # Transfer all keys from our data_store (for which we are primary) to our successor.
+        # Transfer all keys from our data_store (for which we are primary) to the successor.
         try:
             url = f"http://{succ_ip}:{succ_port}/absorb_keys"
             payload = {
@@ -657,8 +656,22 @@ class Node:
         except Exception as e:
             print(f"Error transferring keys to successor: {e}")
 
-        # Clean up our local stores.
+        # Clean up local stores.
         self.data_store.clear()
         self.replica_store.clear()
         print(f"[{self.ip}:{self.port}] Departed gracefully from the ring.")
+
+        # NEW STEP: Notify the bootstrap to remove this node from the ring.
+        try:
+            remove_url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/remove_node"
+            data = {
+                "id": self.id,
+                "ip": self.ip,
+                "port": self.port
+            }
+            requests.post(remove_url, json=data)
+            print(f"[{self.ip}:{self.port}] Informed bootstrap to remove me from the ring.")
+        except Exception as e:
+            print(f"Error informing bootstrap to remove node: {e}")
+
         return True
