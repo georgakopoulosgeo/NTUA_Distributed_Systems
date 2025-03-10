@@ -4,7 +4,7 @@ import json
 import sys
 from colorama import Fore, Style, init
 
-# Initialize colorama so ANSI escape sequences will work on all platforms.
+# Initialize colorama so ANSI escape sequences work on all platforms.
 init(autoreset=True)
 
 def insert_cmd(node_addr, key, value):
@@ -21,7 +21,8 @@ def insert_cmd(node_addr, key, value):
         print()
 
 def query_cmd(node_addr, key):
-    url = f"http://{node_addr}/local_query"
+    # Changed endpoint from /local_query to /query.
+    url = f"http://{node_addr}/query"
     params = {"key": key}
     try:
         response = requests.get(url, params=params)
@@ -76,8 +77,6 @@ def depart_cmd(node_addr):
         print(departure_response)
         print()  # blank line
 
-        # If the response contains the departure message, exit the client.
-        # Adjust this check according to your actual response format.
         if isinstance(departure_response, dict):
             message = departure_response.get("message", "").lower()
         elif isinstance(departure_response, str):
@@ -89,7 +88,6 @@ def depart_cmd(node_addr):
             print(Fore.MAGENTA + "Exiting client." + Style.RESET_ALL)
             sys.exit(0)
         else:
-            # Optionally exit anyway after a successful depart.
             sys.exit(0)
     except Exception as e:
         print(Fore.RED + "\n[Error during depart]" + Style.RESET_ALL, e)
@@ -142,7 +140,7 @@ def main():
         response = requests.get(url, timeout=2)
         response.raise_for_status()
     except Exception as e:
-        print(Fore.RED + f"\n[Error] Unable to connect to node at {node_addr}. Node is not part of the system.")
+        print(Fore.RED + f"\n[Error] Unable to connect to node at {node_addr}. Node is not part of the system." + Style.RESET_ALL)
         sys.exit(1)
     # ----------------------------------------------------------------
 
@@ -202,7 +200,7 @@ def main():
                 print()
                 continue
             depart_cmd(node_addr)
-            # depart_cmd will call sys.exit(0) if it succeeds, so we won't reach here.
+            # depart_cmd will exit the client if successful.
 
         elif cmd == "help":
             help_cmd()
