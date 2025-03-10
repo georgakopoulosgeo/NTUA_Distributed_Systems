@@ -1,3 +1,4 @@
+import argparse
 import requests
 import threading
 import time
@@ -78,8 +79,8 @@ def run_distributed_insert_experiment(bootstrap_addr, num_nodes=5):
 
     # For each node, create a thread that calls /start_inserts
     for i, entry in enumerate(ring[:num_nodes]):
-        #node_ip = entry["ip"]   # e.g. "node1" or "127.0.0.1"
-        node_ip = "127.0.0.1"
+        node_ip = entry["ip"]   # e.g. "node1" or "127.0.0.1"
+        #node_ip = "127.0.0.1"
         node_port = entry["port"]    # e.g. "8001"
         node_addr = f"{node_ip}:{node_port}"
 
@@ -114,5 +115,13 @@ def run_distributed_insert_experiment(bootstrap_addr, num_nodes=5):
 
 
 if __name__ == "__main__":
-    # Example usage: call the function for 5 nodes
-    run_distributed_insert_experiment("127.0.0.1:8000", num_nodes=5)
+    parser = argparse.ArgumentParser(description="Distributed Request Experiment")
+    parser.add_argument("--bootstrap_ip", type=str, default="127.0.0.1", help="IP address of the bootstrap node")
+    parser.add_argument("--bootstrap_port", type=int, default=8000, help="Port of the bootstrap node")
+    parser.add_argument("--num_nodes", type=int, default=5, help="Number of nodes to run the experiment on")
+    args = parser.parse_args()
+
+    bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
+    run_distributed_insert_experiment(bootstrap_addr, args.num_nodes)
+
+# python insert_experiment.py --bootstrap_ip 127.0.0.1 --bootstrap_port 8000 --num_nodes 5

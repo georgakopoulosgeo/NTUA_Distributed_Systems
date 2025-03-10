@@ -1,3 +1,4 @@
+import argparse
 import csv
 import threading
 import requests
@@ -257,7 +258,8 @@ def run_distributed_request_experiment_with_comparison(bootstrap_addr, num_nodes
     logs_per_node = [None] * num_nodes
 
     for i, entry in enumerate(ring[:num_nodes]):
-        node_ip = "127.0.0.1"  # Use localhost if testing locally
+        #node_ip = "127.0.0.1"  # Use localhost if testing locally
+        node_ip = entry["ip"]
         node_port = entry["port"]
         node_addr = f"{node_ip}:{node_port}"
         file_number = f"{i:02d}"
@@ -313,5 +315,13 @@ def run_distributed_request_experiment_with_comparison(bootstrap_addr, num_nodes
     print(f"Detailed query comparison logs written to {csv_filename}")
 
 if __name__ == "__main__":
-    bootstrap_addr = "127.0.0.1:8000"  # Adjust as needed.
-    run_distributed_request_experiment_with_comparison(bootstrap_addr, num_nodes=5)
+    parser = argparse.ArgumentParser(description="Distributed Request Experiment")
+    parser.add_argument("--bootstrap_ip", type=str, default="127.0.0.1", help="IP address of the bootstrap node")
+    parser.add_argument("--bootstrap_port", type=int, default=8000, help="Port of the bootstrap node")
+    parser.add_argument("--num_nodes", type=int, default=5, help="Number of nodes to run the experiment on")
+    args = parser.parse_args()
+
+    bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
+    run_distributed_request_experiment_with_comparison(bootstrap_addr, args.num_nodes)
+
+# python request_experiment.py --bootstrap_ip 127.0.0.1 --bootstrap_port 8000 --num_nodes 5

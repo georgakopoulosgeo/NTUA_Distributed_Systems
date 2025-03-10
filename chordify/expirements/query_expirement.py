@@ -1,3 +1,4 @@
+import argparse
 import requests
 import threading
 import time
@@ -73,7 +74,8 @@ def run_distributed_query_experiment(bootstrap_addr, num_nodes=5):
     # For each node, create a thread that calls /start_queries
     for i, entry in enumerate(ring[:num_nodes]):
         # If running on the host, you might use "127.0.0.1" with published ports.
-        node_ip = "127.0.0.1"
+        #node_ip = "127.0.0.1"
+        node_ip = entry["ip"] 
         node_port = entry["port"]  # e.g., "8001"
         node_addr = f"{node_ip}:{node_port}"
         file_number = f"{i:02d}"  # e.g. "00", "01", etc.
@@ -103,5 +105,13 @@ def run_distributed_query_experiment(bootstrap_addr, num_nodes=5):
     print("==============================================")
 
 if __name__ == "__main__":
-    # Example usage: use the bootstrap node address and run the experiment on 5 nodes.
-    run_distributed_query_experiment("127.0.0.1:8000", num_nodes=5)
+    parser = argparse.ArgumentParser(description="Distributed Request Experiment")
+    parser.add_argument("--bootstrap_ip", type=str, default="127.0.0.1", help="IP address of the bootstrap node")
+    parser.add_argument("--bootstrap_port", type=int, default=8000, help="Port of the bootstrap node")
+    parser.add_argument("--num_nodes", type=int, default=5, help="Number of nodes to run the experiment on")
+    args = parser.parse_args()
+
+    bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
+    run_distributed_query_experiment(bootstrap_addr, args.num_nodes)
+
+# python query_experiment.py --bootstrap_ip 127.0.0.1 --bootstrap_port 8000 --num_nodes 5
