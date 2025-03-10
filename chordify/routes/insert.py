@@ -15,8 +15,8 @@ def node_info():
     info = {
         "replica_store": node.replica_store,
         "id": node.id,
-        #"ip": node.ip,
-        #"port": node.port,
+        "ip": node.ip,
+        "port": node.port,
         #"is_bootstrap": node.is_bootstrap,
         "data_store": node.data_store,
         "replication_factor": node.replication_factor,
