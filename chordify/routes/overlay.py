@@ -49,6 +49,9 @@ def update_settings():
     if not ring:
         return jsonify({"error": "Ring information is not available."}), 500
 
+    # Create a dictionary for the bootstrap node details to use as origin.
+    bootstrap_info = {"ip": node.ip, "port": node.port}
+
     # 4. For each node in the ring, send a deletion request for each song.
     for entry in ring:
         ip = entry["ip"]
@@ -63,7 +66,8 @@ def update_settings():
                 songs = list(node_info.get("data_store", {}).keys())
                 for song in songs:
                     delete_url = f"http://{ip}:{port}/delete"
-                    payload = {"key": song, "origin": "bootstrap"}
+                    # Use the dictionary for origin instead of a string.
+                    payload = {"key": song, "origin": bootstrap_info}
                     del_resp = requests.post(delete_url, json=payload)
                     if del_resp.status_code != 200:
                         print(f"Failed to delete song '{song}' on node {ip}:{port}")
@@ -89,6 +93,7 @@ def update_settings():
             print(f"Error updating settings on node {ip}:{port}: {e}")
 
     return jsonify({"result": "Settings update initiated successfully."}), 200
+
 
 @overlay_bp.route("/update_config", methods=["POST"])
 def update_config():

@@ -399,12 +399,12 @@ class Node:
     
     def delete(self, key: str, origin: dict = None):
         """
-        Delete a key (song) from the node.
-        If origin is None, this node is the origin and sets up a pending request.
+        Delete a key (song) from the node.  
+        If origin is None, this node is the origin and sets up a pending request.  
         Otherwise, the request is being forwarded.
         """
         if origin is None:
-            # Setup origin info for callback
+            # This node is the origin
             request_id = str(uuid.uuid4())
             event = threading.Event()
             self.pending_requests[request_id] = {"event": event, "result": None}
@@ -412,8 +412,9 @@ class Node:
             print(f"[{self.ip}:{self.port}] Origin delete request: {origin}")
 
         key_hash = self.compute_hash(key)
+
         if self.is_responsible(key_hash):
-            # Responsible node: attempt deletion in own data_store
+            # We are the responsible node => remove from our data_store
             if key in self.data_store:
                 del self.data_store[key]
                 msg = f"Key '{key}' deleted from node {self.ip}."
@@ -421,6 +422,7 @@ class Node:
             else:
                 msg = f"Key '{key}' not found on node {self.ip}."
                 result = False
+
             final_result = {
                 "result": result,
                 "message": msg,
@@ -429,22 +431,39 @@ class Node:
             }
             print(f"[{self.ip}:{self.port}] {msg}")
 
-            # Propagate deletion to replicas if needed
+            # Now replicate the delete to other nodes
             if self.replication_factor > 1:
                 if self.consistency_mode == "linearizability":
+                    # Synchronous chain replication
                     replication_count = self.replication_factor - 1
-                    ack = self.chain_replicate_delete(key, replication_count)
-                    if not ack:
-                        final_result["result"] = False
-                        final_result["message"] += " Chain replication deletion failed."
-                        print(f"[{self.ip}:{self.port}] Chain replication deletion failed for key '{key}'.")
+                    if replication_count > 0:
+                        # Forward the chain delete to successor
+                        successor_ip = self.successor["ip"]
+                        successor_port = self.successor["port"]
+                        url = f"http://{successor_ip}:{successor_port}/chain_replicate_delete"
+                        payload = {"key": key, "replication_count": replication_count}
+                        try:
+                            print(f"[{self.ip}:{self.port}] Forwarding chain replication delete for '{key}' to {successor_ip}:{successor_port}.")
+                            response = requests.post(url, json=payload, timeout=2)
+                            # Check ack
+                            ack = (response.status_code == 200 and response.json().get("ack", False))
+                            if not ack:
+                                final_result["result"] = False
+                                final_result["message"] += " Chain replication deletion failed."
+                                print(f"[{self.ip}:{self.port}] Chain replication deletion failed for key '{key}'.")
+                        except Exception as e:
+                            final_result["result"] = False
+                            final_result["message"] += f" Chain replication deletion failed: {e}"
                 else:
+                    # Eventual => async replicate to the next node
                     threading.Thread(target=self.async_replicate_delete, args=(key, self.replication_factor - 1)).start()
 
-            # Return or callback the final result
+            # Callback or return
             if origin is None or (origin["ip"] == self.ip and origin["port"] == self.port):
+                # We are the origin and can return directly
                 return final_result
             else:
+                # Send callback to the origin
                 callback_url = f"http://{origin['ip']}:{origin['port']}/delete_response"
                 try:
                     requests.post(callback_url, json={
@@ -455,8 +474,9 @@ class Node:
                 except Exception as e:
                     print(f"Error sending delete callback: {e}")
                 return {"result": True, "message": "Delete processed; callback sent to origin."}
+
         else:
-            # Not responsible: forward the delete request to the successor.
+            # Not responsible => forward to successor
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/delete"
@@ -470,25 +490,26 @@ class Node:
 
     def chain_replicate_delete(self, key: str, replication_count: int) -> bool:
         """
-        Perform synchronous (chain) deletion replication.
-        Delete the key from the local store and, if more replicas are needed,
-        forward the delete request to the successor.
+        Perform synchronous chain deletion replication for linearizability.
+        In this approach, replicas store the key in replica_store,
+        so remove it from replica_store here, then forward if needed.
         """
-        if key in self.data_store:
-            del self.data_store[key]
-            print(f"[{self.ip}:{self.port}] (Chain) Deleted key '{key}' locally.")
+        # Remove from replica_store (because this node is a replica in the chain)
+        if key in self.replica_store:
+            del self.replica_store[key]
+            print(f"[{self.ip}:{self.port}] (Chain) Deleted key '{key}' from replica_store.")
         else:
-            print(f"[{self.ip}:{self.port}] No replica for key '{key}' found to delete.")
+            print(f"[{self.ip}:{self.port}] (Chain) Key '{key}' not found in replica_store.")
             return False
 
-        # Forward the deletion replication if further replicas need updating.
+        # Forward if there are more replicas in the chain
         if replication_count > 0:
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/chain_replicate_delete"
             payload = {"key": key, "replication_count": replication_count - 1}
             try:
-                print(f"[{self.ip}:{self.port}] Forwarding chain deletion for key '{key}' to {successor_ip}:{successor_port} with count {replication_count}.")
+                print(f"[{self.ip}:{self.port}] Forwarding chain deletion for key '{key}' to {successor_ip}:{successor_port} (count={replication_count - 1}).")
                 response = requests.post(url, json=payload, timeout=2)
                 if response.status_code == 200:
                     ack = response.json().get("ack", False)
@@ -500,7 +521,7 @@ class Node:
                 print(f"Error in chain replication deletion: {e}")
                 return False
         else:
-            # Instruct successor to delete any stale replica when count reaches 0.
+            # If replication_count == 0, instruct successor to clean stale replicas if needed
             successor_ip = self.successor["ip"]
             successor_port = self.successor["port"]
             url = f"http://{successor_ip}:{successor_port}/replicate_delete"
@@ -510,6 +531,7 @@ class Node:
                 requests.post(url, json=payload, timeout=2)
             except Exception as e:
                 print(f"[{self.ip}:{self.port}] Error forwarding delete replication: {e}")
+            return True
 
     def async_replicate_delete(self, key: str, replication_count: int):
         """
