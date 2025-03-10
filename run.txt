@@ -113,3 +113,31 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/delete" `
   -Method Post `
   -Headers @{ "Content-Type" = "application/json" } `
   -Body '{"key": "song1"}'
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+AWS
+
+// At the end ALWAYS
+git restore *
+
+// Stop and remove all containers
+sudo docker rm -f $(sudo docker ps -aq)
+
+// Deploy Bootstrap and 1 Node in VM1:
+git pull
+cd chordify/scritps/
+sudo chmod +x deploy_bootstrap.sh
+sudo ./deploy_bootstrap.sh
+
+// Deploy 2 Nodes in other VMs
+git pull
+cd chordify/scritps/
+sudo chmod +x deploy_node.sh
+sudo ./deploy_node.sh
+
+// Run Expirements
+python3 request_expirement.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 4
+
+// Change Configurations (Also delete all songs)
+curl -X POST -H "Content-Type: application/json" -d '{"replication_factor": 3, "consistency_mode": "linearizability"}' http://10.0.62.44:8000/update_settings

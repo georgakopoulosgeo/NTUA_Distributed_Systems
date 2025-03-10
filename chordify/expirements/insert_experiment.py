@@ -19,18 +19,24 @@ def get_info(bootstrap_addr):
         "consistency_mode": data.get("consistency_mode")
     }
 
-def _start_queries_on_node(node_addr, file_number, results, index):
-    # Thread worker that POSTs to /start_queries on node_addr with the given file_number.
-    # Stores the result (or error) in results[index].
-    url = f"http://{node_addr}/start_queries"
+def _start_inserts_on_node(node_addr, file_number, results, index):
+    """
+    Thread worker function that:
+      1. POSTs /start_inserts to the node_addr
+      2. Passes {"file_number": file_number} as JSON
+      3. Stores the response (or any error) in results[index]
+    """
+    url = f"http://{node_addr}/start_inserts"
     payload = {"file_number": file_number}
     start_time = time.time()
+
     try:
-        r = requests.post(url, json=payload, timeout=120)
+        r = requests.post(url, json=payload, timeout=248)
         r.raise_for_status()
-        data = r.json()  # Expected to include "status", "queried", "time_seconds", etc.
+        data = r.json()  # e.g. {"status":"done","inserted":..., "time_seconds":...}
         end_time = time.time()
         total_duration = end_time - start_time
+
         results[index] = {
             "node": node_addr,
             "file_number": file_number,
@@ -46,13 +52,13 @@ def _start_queries_on_node(node_addr, file_number, results, index):
             "request_duration": round(end_time - start_time, 2)
         }
 
-def run_distributed_query_experiment(bootstrap_addr, num_nodes=5):
+def run_distributed_insert_experiment(bootstrap_addr, num_nodes=5, local_flag=False):
     """
-    1. Fetches the overlay from the bootstrap node.
-    2. Sorts the ring entries by 'id'.
-    3. For the first num_nodes, spawns a thread that sends a /start_queries request.
-       The file_number is set as a two-digit string (e.g. "00", "01", etc.).
-    4. Waits for all threads to finish and prints the results.
+    1) Fetches the overlay from bootstrap_addr
+    2) Sorts the ring by 'id' (or any consistent key)
+    3) Spawns threads for the first 'num_nodes' in the ring
+    4) Sends each node a "file_number" = i in two-digit format ("00","01",...)
+    5) Waits for all threads and prints results
     """
     overlay_data = get_overlay(bootstrap_addr)
     ring = overlay_data.get("ring", [])
@@ -65,53 +71,62 @@ def run_distributed_query_experiment(bootstrap_addr, num_nodes=5):
         print(f"Overlay only has {len(ring)} nodes, but we need {num_nodes}. Aborting.")
         return
 
-    # Sort the ring entries by node 'id' (adjust key as needed)
+    # Sort the ring entries by node ID (adjust if 'id' is not numeric)
     ring = sorted(ring, key=lambda x: x["id"])
 
     threads = []
     results = [None] * num_nodes
 
-    # For each node, create a thread that calls /start_queries
+    # For each node, create a thread that calls /start_inserts
     for i, entry in enumerate(ring[:num_nodes]):
-        # If running on the host, you might use "127.0.0.1" with published ports.
-        #node_ip = "127.0.0.1"
-        node_ip = entry["ip"] 
-        node_port = entry["port"]  # e.g., "8001"
+        if local_flag:
+            node_ip = "127.0.0.1"  # When Running in Docker use the localhost
+        else:
+            node_ip = entry["ip"]
+        node_port = entry["port"]
         node_addr = f"{node_ip}:{node_port}"
-        file_number = f"{i:02d}"  # e.g. "00", "01", etc.
+
+        # Build the file_number in two-digit format, e.g. 0 -> "00", 1 -> "01", ...
+        file_number = f"{i:02d}"
+
         t = threading.Thread(
-            target=_start_queries_on_node,
+            target=_start_inserts_on_node,
             args=(node_addr, file_number, results, i)
         )
         threads.append(t)
 
-    # Start all threads almost simultaneously
+    # Start all threads nearly simultaneously
     for t in threads:
         t.start()
-    # Wait for all threads to finish
+
+    # Wait for them to finish
     for t in threads:
         t.join()
 
-    print("=== Distributed Query Experiment Results ===")
+    print("=== Distributed Insert Experiment Results ===")
     print(f"Replication Factor: {replication_factor}, Consistency Mode: {consistency_mode}")
     for res in results:
         if "error" in res:
             print(f"[{res['node']}] file_number={res['file_number']} => ERROR: {res['error']}")
         else:
             print(f"[{res['node']}] file_number={res['file_number']} => "
-                  f"queried={res['node_response']['queried']} "
-                  f"time_seconds={res['node_response']['time_seconds']} "
-                  f"read throughput={res['node_response']['queried'] / res['node_response']['time_seconds']:.2f}")
+                  f"node_response={res['node_response']}, "
+                  f"request_duration={res['request_duration']}s, "
+                  f"write throughput={res['node_response']['inserted'] / res['request_duration']:.2f} ops/sec")
     print("==============================================")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Distributed Request Experiment")
     parser.add_argument("--bootstrap_ip", type=str, default="127.0.0.1", help="IP address of the bootstrap node")
     parser.add_argument("--bootstrap_port", type=int, default=8000, help="Port of the bootstrap node")
     parser.add_argument("--num_nodes", type=int, default=5, help="Number of nodes to run the experiment on")
+    # Flag if running locally
+    parser.add_argument("--local", action="store_true", help="Run locally")
     args = parser.parse_args()
+    local_flag = args.local
 
     bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
-    run_distributed_query_experiment(bootstrap_addr, args.num_nodes)
+    run_distributed_insert_experiment(bootstrap_addr, args.num_nodes, local_flag)
 
-# python query_experiment.py --bootstrap_ip 127.0.0.1 --bootstrap_port 8000 --num_nodes 5
+# python insert_experiment.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 4

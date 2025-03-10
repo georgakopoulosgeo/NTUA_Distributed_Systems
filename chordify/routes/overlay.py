@@ -11,12 +11,14 @@ def overlay():
         ring = current_app.config.get('RING', [])
         minimal_ring = []
         for entry in ring:
+            successor = f"{entry['successor']['ip']}:{entry['successor']['port']}"
+            predecessor = f"{entry['predecessor']['ip']}:{entry['predecessor']['port']}"
             minimal_ring.append({
                 "id": entry["id"],
                 "ip": entry["ip"],
                 "port": entry["port"],
-                "predecessor": entry["predecessor"]["ip"],
-                "successor": entry["successor"]["ip"]
+                "predecessor": predecessor,
+                "successor": successor
             })
         return jsonify({"ring": minimal_ring}), 200
     else:
