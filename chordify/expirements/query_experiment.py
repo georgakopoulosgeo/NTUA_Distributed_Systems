@@ -117,4 +117,4 @@ if __name__ == "__main__":
     bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
     run_distributed_query_experiment(bootstrap_addr, args.num_nodes, local_flag)
 
-# python query_experiment.py --bootstrap_ip 127.0.0.1 --bootstrap_port 8000 --num_nodes 5
+# python3 query_experiment.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 10

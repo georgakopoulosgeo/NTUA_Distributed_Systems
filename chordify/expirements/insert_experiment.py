@@ -129,4 +129,4 @@ if __name__ == "__main__":
     bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
     run_distributed_insert_experiment(bootstrap_addr, args.num_nodes, local_flag)
 
-# python insert_experiment.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 4
+# python3 insert_experiment.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 10

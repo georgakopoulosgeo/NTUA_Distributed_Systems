@@ -17,6 +17,11 @@ def get_info(bootstrap_addr):
     r.raise_for_status()
     return r.json()
 
+def to_set(value_str):
+    if not value_str:
+        return set()
+    return set(x.strip() for x in value_str.split("|"))
+
 def run_requests_on_node_with_logging(node_addr, file_number, results, logs_list, index):
     """
     Reads the file "requests_{file_number}.txt" and executes each request on the given node.
@@ -186,13 +191,13 @@ def compute_expected_values(global_logs, consistency_mode):
                 log_copy = log.copy()
                 log_copy["expected_value"] = exp_val
                 returned_val = log.get("returned_value")
-                if exp_val is not None and returned_val == exp_val:
-                    log_copy["freshness"] = "fresh"
-                elif exp_val is None and returned_val is None:
-                    log_copy["freshness"] = "fresh"
+                if returned_val == False:
+                    log_copy["freshness"] = ""
                 else:
-                    if returned_val is False:
-                        log_copy["freshness"] = ""
+                    exp_val_set = to_set(exp_val)
+                    returned_val_set = to_set(returned_val)
+                    if exp_val_set == returned_val_set:
+                        log_copy["freshness"] = "fresh"
                     else:
                         log_copy["freshness"] = "stale"
                 comparison_logs.append(log_copy)
@@ -218,13 +223,13 @@ def compute_expected_values(global_logs, consistency_mode):
                 log_copy = log.copy()
                 log_copy["expected_value"] = exp_val
                 returned_val = log.get("returned_value")
-                if exp_val is not None and returned_val == exp_val:
-                    log_copy["freshness"] = "fresh"
-                elif (exp_val is None or exp_val.strip() == "") and (returned_val is None or (isinstance(returned_val, str) and returned_val.strip() == "")):
-                    log_copy["freshness"] = "fresh"
+                if returned_val == False:
+                    log_copy["freshness"] = ""
                 else:
-                    if returned_val is False:
-                        log_copy["freshness"] = ""
+                    exp_val_set = to_set(exp_val)
+                    returned_val_set = to_set(returned_val)
+                    if exp_val_set == returned_val_set:
+                        log_copy["freshness"] = "fresh"
                     else:
                         log_copy["freshness"] = "stale"
                 comparison_logs.append(log_copy)
@@ -328,4 +333,4 @@ if __name__ == "__main__":
     bootstrap_addr = f"{args.bootstrap_ip}:{args.bootstrap_port}"
     run_distributed_request_experiment_with_comparison(bootstrap_addr, args.num_nodes, local_flag)
 
-# python request_experiment.py --bootstrap_ip 127.0.0.1 --bootstrap_port 8000 --num_nodes 5
+# python3 request_experiment.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 10

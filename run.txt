@@ -124,6 +124,9 @@ git restore *
 // Stop and remove all containers
 sudo docker rm -f $(sudo docker ps -aq)
 
+// Create image for docker to use 
+sudo docker build -t chord-app .
+
 // Deploy Bootstrap and 1 Node in VM1:
 git pull
 cd chordify/scritps/
@@ -140,11 +143,17 @@ sudo ./deploy_node.sh
 python3 request_expirement.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 4
 
 // Change Configurations (Also delete all songs)
-curl -X POST -H "Content-Type: application/json" -d '{"replication_factor": 3, "consistency_mode": "linearizability"}' http://10.0.62.44:8000/update_settings
+curl -X POST -H "Content-Type: application/json" -d '{"replication_factor": 1, "consistency_mode": "linearizability"}' http://10.0.62.44:8000/update_settings
 
 // Nodes
 44:8000
 0
+
+183:8002
+24143611642021087769965016016911796183215422724
+
+48:8001
+75142041091136173815320167490110446356621531987
 
 4:8001
 100327599628895595809874772797002322028919969014
@@ -152,5 +161,26 @@ curl -X POST -H "Content-Type: application/json" -d '{"replication_factor": 3, "
 44:8001
 295932134150687556341207193662481870356174536331
 
+217:8001
+411874805086580080154720257350036684338272740759
+
+48:8002
+547855836760873760974161719315521171288480286053
+
+183:8001
+739793560834826224520256699940780490425450258197
+
 4:8002
 1376187645279844781901574523592213044469256684617
+
+217:8002
+1395659438043788344394894604843344294049593540490
+
+
+
+////////////// Commands
+curl -X GET http://10.0.62.183:8001/overlay
+
+curl -X GET http://10.0.62.183:8001/nodeinfo
+
+curl -X GET "http://10.0.62.183:8001/query?key=*"
