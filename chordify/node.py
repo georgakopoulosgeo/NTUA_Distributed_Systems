@@ -367,12 +367,13 @@ class Node:
 
         print(f"[{my_id}] Processing wildcard query. Origin: {origin}")
 
-        # Gather local songs from both primary and replica stores.
-        local_songs = {}
-        local_songs.update(self.data_store)
-        local_songs.update(self.replica_store)
+        # Gather local songs separately from primary and replica stores.
+        node_songs = {
+            "original_songs": self.data_store,   # primary/original songs
+            "replica_songs": self.replica_store    # replica songs
+        }
         # Create a result dict mapping this node to its songs.
-        result = {my_id: local_songs}
+        result = {my_id: node_songs}
 
         # Determine successor identifier.
         successor_identifier = f"{self.successor.get('ip')}:{self.successor.get('port')}"
@@ -395,9 +396,10 @@ class Node:
             print(f"[{my_id}] Error forwarding wildcard query: {e}")
             successor_data = {}
 
-    # Merge our own result with the data returned from the successor.
+        # Merge our own result with the data returned from the successor.
         result.update(successor_data)
         return result
+
 
     # Main method for deleting a key-value pair from the DHT.
     def delete(self, key: str, origin: dict = None):

@@ -14,21 +14,24 @@ def insert_cmd(node_addr, key, value):
         response = requests.post(url, json=payload)
         response.raise_for_status()
         print(Fore.GREEN + "\n[Insert successful]" + Style.RESET_ALL)
-        print(response.json())
+        # Pretty-print the JSON response with an indent of 4 spaces.
+        formatted_output = json.dumps(response.json(), indent=4)
+        print(formatted_output)
         print()  # blank line
     except Exception as e:
         print(Fore.RED + "\n[Error during insert]" + Style.RESET_ALL, e)
         print()
 
 def query_cmd(node_addr, key):
-    # Changed endpoint from /local_query to /query.
     url = f"http://{node_addr}/query"
     params = {"key": key}
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         print(Fore.GREEN + "\n[Query result]" + Style.RESET_ALL)
-        print(response.json())
+        # Pretty-print the JSON response with an indent of 4 spaces.
+        formatted_output = json.dumps(response.json(), indent=4)
+        print(formatted_output)
         print()  # blank line
     except Exception as e:
         print(Fore.RED + "\n[Error during query]" + Style.RESET_ALL, e)
@@ -41,7 +44,9 @@ def delete_cmd(node_addr, key):
         response = requests.post(url, json=payload)
         response.raise_for_status()
         print(Fore.GREEN + "\n[Delete successful]" + Style.RESET_ALL)
-        print(response.json())
+        # Pretty-print the JSON response with an indent of 4 spaces.
+        formatted_output = json.dumps(response.json(), indent=4)
+        print(formatted_output)
         print()  # blank line
     except Exception as e:
         print(Fore.RED + "\n[Error during delete]" + Style.RESET_ALL, e)
