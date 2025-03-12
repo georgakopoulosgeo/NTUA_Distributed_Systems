@@ -365,35 +365,40 @@ class Node:
         if origin is None:
             origin = my_id
 
-        print(f"[{self.ip}:{self.port}] Processing wildcard query. Origin: {origin}")
+        print(f"[{my_id}] Processing wildcard query. Origin: {origin}")
+
+        # Gather local songs from both primary and replica stores.
+        local_songs = {}
+        local_songs.update(self.data_store)
+        local_songs.update(self.replica_store)
+        # Create a result dict mapping this node to its songs.
+        result = {my_id: local_songs}
 
         # Determine successor identifier.
         successor_identifier = f"{self.successor.get('ip')}:{self.successor.get('port')}"
-        # If the successor is the origin, we've reached the end of the ring.
+        # If we've completed a full circle, return our result.
         if successor_identifier == origin:
-            print(f"[{self.ip}:{self.port}] Wildcard query reached the end of the ring. Returning local data.")
-            return self.data_store
+            print(f"[{my_id}] Wildcard query reached the end of the ring. Returning local data.")
+            return result
 
         # Otherwise, forward the wildcard query to the successor.
         url = f"http://{self.successor['ip']}:{self.successor['port']}/query?key=*&origin={origin}"
         try:
-            print(f"[{self.ip}:{self.port}] Forwarding wildcard query to {successor_identifier} with origin {origin}.")
+            print(f"[{my_id}] Forwarding wildcard query to {successor_identifier} with origin {origin}.")
             response = requests.get(url, timeout=3)
             if response.status_code == 200:
                 successor_data = response.json().get("all_songs", {})
             else:
-                print(f"[{self.ip}:{self.port}] Error: Received status code {response.status_code} from successor.")
+                print(f"[{my_id}] Error: Received status code {response.status_code} from successor.")
                 successor_data = {}
         except Exception as e:
-            print(f"[{self.ip}:{self.port}] Error forwarding wildcard query: {e}")
+            print(f"[{my_id}] Error forwarding wildcard query: {e}")
             successor_data = {}
 
-        # Merge current node's data with the data received from the successor.
-        merged_data = {}
-        merged_data.update(self.data_store)
-        merged_data.update(successor_data)
-        return merged_data
-    
+    # Merge our own result with the data returned from the successor.
+        result.update(successor_data)
+        return result
+
     # Main method for deleting a key-value pair from the DHT.
     def delete(self, key: str, origin: dict = None):
         if origin is None:
