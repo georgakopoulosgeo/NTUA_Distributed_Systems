@@ -5,6 +5,8 @@ docker run --name bootstrap --network chord-network --env-file .env -p 8000:8000
 
 curl -X POST http://127.0.0.1:8001/insert -H "Content-Type: application/json" -d '{"key": "song1", "value": "node8001"}'
 
+curl -X POST -H "Content-Type: application/json" -d '{"replication_factor": 3, "consistency_mode": "eventual"}' http://127.0.0.1:8000/update_settings
+
 curl -X GET "http://127.0.0.1:8001/query?key=song1"
 
 //// On Windows, instead of -X POST, GET
@@ -82,6 +84,8 @@ bootstrap
 
 1060835990263383605338597466665306717774306438481 - song2
 
+965696929074020543867046079388136486593115301208 - jow
+
 897157909036590648573699943635484619774617861767 - yolo
 
 5
@@ -102,12 +106,18 @@ bootstrap
 1
 171865491289448819003469989719053766790160449571
 
+129381022922359489803466488100231636130716702717 - joe
+
 
 
 /// insert / query / delete
 curl -X POST http://node3:8000/insert \
      -H "Content-Type: application/json" \
      -d '{"key": "Imagine"}'
+
+curl -X POST http://127.0.0.1:8001/delete \
+     -H "Content-Type: application/json" \
+     -d '{"key": "song3"}'
 
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/delete" `
   -Method Post `

@@ -89,7 +89,7 @@ def join():
     except Exception as e:
         print(f"[Bootstrap] Failed to update successor {successor_info}: {e}")
 
-    # 4) Request key transfer from the new node's successor. (Added later after the implementation of replication)s
+    # 4) Request key transfer from the new node's successor
     transferred_data = {}
     transfer_url = f"http://{successor_info['ip']}:{successor_info['port']}/transfer_keys"
     payload = {
@@ -129,21 +129,48 @@ def transfer_keys():
     new_node_id = data.get("new_node_id")
     predecessor_id = data.get("predecessor_id")
     transferred = {"data_store": {}, "replica_store": {}}
+    print(f"[{node.ip}:{node.port}] Transferring keys for new node {new_node_id} with predecessor {predecessor_id}")
 
     # Transfer keys from data_store that now belong to the new node.
     for key in list(node.data_store.keys()):
         key_hash = node.compute_hash(key)
         if is_key_in_range(key_hash, predecessor_id, new_node_id):
             transferred["data_store"][key] = node.data_store.pop(key)
+    for key in list(node.replica_store.keys()):
+        transferred["replica_store"][key] = node.replica_store.pop(key)
 
-    # Similarly, transfer replica keys if applicable.
+    print(f"[{node.ip}:{node.port}] Transferred keys for new node: {transferred}")
+    return jsonify(transferred), 200
+
+@join_bp.route("/transfer_missing_replicas", methods=["POST"])
+def transfer_missing_replicas():
+    # This endpoint is called by a node that just joined.
+    node = current_app.config['NODE']
+    data = request.get_json()
+    new_node_id = data.get("new_node_id")
+    predecessor_id = data.get("predecessor_id")
+    transferred = {"replica_store": {}}
+
+    # For each key in the replica_store, check if it now falls into the new node's responsibility.
+    # Here we reuse the same helper is_key_in_range (assumed available) used in /transfer_keys.
     for key in list(node.replica_store.keys()):
         key_hash = node.compute_hash(key)
         if is_key_in_range(key_hash, predecessor_id, new_node_id):
             transferred["replica_store"][key] = node.replica_store.pop(key)
-
-    print(f"[{node.ip}:{node.port}] Transferred keys for new node: {transferred}")
+    
+    print(f"[{node.ip}:{node.port}] Transferred missing replicas for new node: {transferred}")
     return jsonify(transferred), 200
+
+@join_bp.route("/cleanup_replicas_all", methods=["POST"])
+def cleanup_replicas_all():
+    node = current_app.config['NODE']
+    data = request.get_json()
+    ring = data.get("ring")
+    replication_factor = data.get("replication_factor")
+    node.cleanup_replicas(ring, replication_factor)
+    return jsonify({"message": "Replica cleanup completed."}), 200
+
+
 
 # When a new node joins, the successor and predecessor of the nodes affected need to be updated.
 @join_bp.route("/update_neighbors", methods=["POST"])
