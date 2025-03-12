@@ -8,69 +8,76 @@
 </head>
 <body>
   <div class="container">
-    <h1>Distributed Systems Client</h1>
+    <h1> Chordify</h1>
 
     <!-- Start Section -->
     <div id="start-section" class="form-section">
       <h2>Connect to a Node</h2>
       <label for="nodeAddress">Node Address (ip:port):</label>
       <input type="text" id="nodeAddress" placeholder="e.g., 127.0.0.1:8001" />
-      <button class="btn" onclick="startClient()">Let's Start</button>
+      <button class="btn" onclick="startClient()">Connect</button>
     </div>
     <!-- End Start Section -->
 
-    <!-- Commands Section -->
+<!-- Commands Section -->
     <div id="commands-section" style="display: none;">
-      <div class="form-section">
+
+      <!-- Connected Node Message -->
+      <div class="form-section connected-message">
         <h2>Connected to Node: <span id="currentNode"></span></h2>
       </div>
 
-      <div class="form-section">
-        <h2>Insert a Song</h2>
-        <label for="insertKey">Key:</label>
-        <input type="text" id="insertKey" />
-        <label for="insertValue">Value:</label>
-        <textarea id="insertValue"></textarea>
-        <button class="btn" onclick="handleInsert()">Insert</button>
+      <!-- First Row Operations -->
+      <div class="row">
+        <div class="form-section operation-box">
+          <h2>Insert a Song</h2>
+          <label for="insertKey">Key:</label>
+          <input type="text" id="insertKey" />
+          <label for="insertValue">Value:</label>
+          <textarea id="insertValue"></textarea>
+          <button class="btn" onclick="handleInsert()">Insert</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Query a Song</h2>
+          <label for="queryKey">Key:</label>
+          <input type="text" id="queryKey" />
+          <button class="btn" onclick="handleQuery()">Query</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Delete a Song</h2>
+          <label for="deleteKey">Key:</label>
+          <input type="text" id="deleteKey" />
+          <button class="btn" onclick="handleDelete()">Delete</button>
+        </div>
       </div>
 
-      <div class="form-section">
-        <h2>Query a Song</h2>
-        <label for="queryKey">Key:</label>
-        <input type="text" id="queryKey" />
-        <button class="btn" onclick="handleQuery()">Query</button>
+      <!-- Second Row Operations -->
+      <div class="row">
+        <div class="form-section operation-box">
+          <h2>Overlay - Ring's Topology</h2>
+          <button class="btn" onclick="handleOverlay()">Overlay</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Depart from Ring</h2>
+          <button class="btn" onclick="handleDepart()">Depart</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Exit</h2>
+          <button class="btn" onclick="handleExit()">Exit</button>
+        </div>
       </div>
 
-      <div class="form-section">
-        <h2>Delete a Song</h2>
-        <label for="deleteKey">Key:</label>
-        <input type="text" id="deleteKey" />
-        <button class="btn" onclick="handleDelete()">Delete</button>
-      </div>
-
-      <div class="form-section">
-        <h2>Overlay - Ring's Topology</h2>
-        <button class="btn" onclick="handleOverlay()">Overlay</button>
-      </div>
-
-      <div class="form-section">
-        <h2>Depart from Ring</h2>
-        <button class="btn" onclick="handleDepart()">Depart</button>
-      </div>
-
-      <!-- NEW EXIT BUTTON SECTION -->
-      <div class="form-section">
-        <h2>Exit</h2>
-        <button class="btn" onclick="handleExit()">Exit</button>
-      </div>
-
-      <div class="form-section">
+      <!-- Result -->
+      <div class="form-section result-section">
         <h2>Result</h2>
         <div id="result"></div>
       </div>
-    </div>
-    <!-- End Commands Section -->
-  </div>
+
+</div>
 
   <script>
     // Global variable to store the current node address
@@ -117,19 +124,34 @@
           }
           break;
 
-        case 'query':
-          if (data.result === true) {
-            resultContainer.innerHTML = `
-              <p><strong>Query Success!</strong></p>
-              <p><strong>Value:</strong> ${data.value}</p>
-              <p><strong>Source:</strong> ${data.source}</p>
-            `;
-          } else {
-            resultContainer.innerHTML = `
-              <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
-            `;
-          }
-          break;
+          case 'query':
+            // Instead of checking data.value, check for data.result (the string)
+            if (data.result !== undefined) {
+              resultContainer.innerHTML = `
+                <p><strong>Query Success!</strong></p>
+                <p><strong>Value:</strong> ${data.result}</p>
+                <p><strong>Source:</strong> ${data["Result from"]}</p>
+              `;
+            } else {
+              resultContainer.innerHTML = `
+                <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
+              `;
+            }
+            break;
+          
+          case 'query':
+            if (data.value !== undefined) {
+              resultContainer.innerHTML = `
+                <p><strong>Query Success!</strong></p>
+                <p><strong>Value:</strong> ${data.value}</p>
+                <p><strong>Source:</strong> ${data.source}</p>
+              `;
+            } else {
+              resultContainer.innerHTML = `
+                <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
+              `;
+            }
+            break;
 
         case 'delete':
           if (data.result === true) {

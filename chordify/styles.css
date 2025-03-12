@@ -95,7 +95,7 @@ h1, h2 {
 
 /* Table Styles inside the Result Box */
 #result table {
-  width: 100%;
+  width: 450px;
   border-collapse: collapse;
   table-layout: fixed; /* So columns don't expand too wide */
 }
@@ -106,3 +106,34 @@ h1, h2 {
   padding: 8px;
   word-wrap: break-word; /* Wrap long text */
 }
+
+/* Container wider to fit the operations neatly */
+.container {
+  max-width: 1200px;
+}
+
+/* Row styling */
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 50px;
+}
+
+/* Operation boxes equally spaced */
+.operation-box {
+  flex: 1;
+  margin: 0 20px;
+}
+
+/* Connected message box */
+.connected-message {
+  margin-bottom: 100px;
+  text-align: center;
+}
+
+/* Result section */
+.result-section {
+  margin-top: 30px;
+  padding: 20px;
+}
+
