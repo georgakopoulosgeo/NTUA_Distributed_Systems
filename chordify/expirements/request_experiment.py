@@ -171,22 +171,16 @@ def compute_expected_values(global_logs, consistency_mode):
                 key = log["key"]
                 val = log["insert_value"]
                 commit_time = log.get("commit_time", log["end_time"])  # fallback if commit_time not available
-
-                # Instead of updating expected_state immediately,
-                # you may need to collect all inserts per key and sort them by commit_time.
                 if key not in expected_state:
                     expected_state[key] = []
                 expected_state[key].append((commit_time, val))
-                # Append the insert log as-is (freshness does not apply to inserts)
                 log_copy = log.copy()
                 log_copy["expected_value"] = None
                 log_copy["freshness"] = None
                 comparison_logs.append(log_copy)
             elif log["operation"] == "query":
                 key = log["key"]
-                # Get all inserts for that key and sort them by commit_time
                 insert_entries = sorted(expected_state.get(key, []), key=lambda x: x[0])
-                # Build expected value by concatenating in commit order
                 exp_val = " | ".join(val for _, val in insert_entries) if insert_entries else None
                 log_copy = log.copy()
                 log_copy["expected_value"] = exp_val
@@ -207,7 +201,6 @@ def compute_expected_values(global_logs, consistency_mode):
             if log["operation"] == "insert":
                 key = log["key"]
                 val = log["insert_value"]
-                # Use commit_seq if available; otherwise fallback to commit_time or end_time.
                 order_val = log.get("commit_seq", log.get("commit_time", log["end_time"]))
                 if key not in expected_state:
                     expected_state[key] = []

@@ -89,3 +89,23 @@ def absorb_keys():
     
     print(f"[{node.ip}:{node.port}] Absorbed keys from departing node: {list(keys.keys())}")
     return jsonify({"message": "Keys absorbed and replication updated."}), 200
+
+@depart_bp.route("/cleanup_replicas_all", methods=["POST"])
+def cleanup_replicas_all():
+    node = current_app.config['NODE']
+    data = request.get_json()
+    ring = data.get("ring")
+    replication_factor = data.get("replication_factor")
+    node.cleanup_replicas(ring, replication_factor)
+    return jsonify({"message": "Replica cleanup completed."}), 200
+
+@depart_bp.route("/repair_replicas_all", methods=["POST"])
+def repair_replicas_all():
+    node = current_app.config['NODE']
+    data = request.get_json()
+    ring = data.get("ring")
+    replication_factor = data.get("replication_factor")
+    node.update_local_pointers(ring)
+    node.repair_replicas(ring, replication_factor)
+    return jsonify({"message": "Replica repair completed."}), 200
+
