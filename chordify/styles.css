@@ -1,91 +1,108 @@
 /* General Styles */
 body {
-    font-family: Arial, sans-serif;
-    /* Dark gradient background */
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    margin: 20px;
-    padding: 0;
-    color: #f0f0f0;
-  }
-  
-  /* Container Styles */
-  .container {
-    max-width: 500px;
-    margin: 0 auto;
-    background: #1e1e1e;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  }
-  
-  /* Headings */
-  h1, h2 {
-    text-align: center;
-    color: #f0f0f0;
-  }
-  
-  /* Form Section Styles */
-.form-section {
-    width: 300px;
-    margin: 0 auto 40px auto;
-    padding: 15px;
-    border: 1px solid #914141;
-    border-radius: 8px;
-    background-color: #330e0e;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  margin: 20px;
+  padding: 0;
+  color: #f0f0f0;
 }
-  
-  .form-section label {
-    display: block;
-    margin-bottom: 5px;
-    color: #ccc;
-    font-weight: bold;
-  }
-  
-  /* Input and Textarea Styles */
-  .form-section input,
-  .form-section textarea {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 10px;
-    box-sizing: border-box;
-    border: 1px solid #555;
-    border-radius: 4px;
-    background-color: #3a3a3a;
-    color: #f0f0f0;
-    transition: border-color 0.3s ease;
-  }
-  
-  .form-section input:focus,
-  .form-section textarea:focus {
-    border-color: #4285f4;
-    outline: none;
-  }
-  
-  /* Button Styles */
-  .btn {
-    display: inline-block;
-    padding: 10px 20px;
-    background-color: #4285f4;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .btn:hover {
-    background-color: #357ae8;
-  }
-  
-  /* Result Box */
-  #result {
-    background: #2c3e50;
-    border: 1px solid #1a252f;
-    padding: 15px;
-    border-radius: 4px;
-    white-space: pre-wrap;
-    font-family: monospace;
-    color: #f0f0f0;
-  }
-  
+
+/* Container Styles */
+.container {
+  max-width: 500px;
+  margin: 0 auto;
+  background: #1e1e1e;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Headings */
+h1, h2 {
+  text-align: center;
+  color: #f0f0f0;
+}
+
+/* Form Section Styles */
+.form-section {
+  width: 350px;
+  margin: 0 auto 40px auto;
+  padding: 15px;
+  border: 1px solid #914141;
+  border-radius: 8px;
+  background-color: #330e0e;
+}
+
+.form-section label {
+  display: block;
+  margin-bottom: 5px;
+  color: #ccc;
+  font-weight: bold;
+}
+
+/* Input and Textarea Styles */
+.form-section input,
+.form-section textarea {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #3a3a3a;
+  color: #f0f0f0;
+  transition: border-color 0.3s ease;
+}
+
+.form-section input:focus,
+.form-section textarea:focus {
+  border-color: #4285f4;
+  outline: none;
+}
+
+/* Button Styles */
+.btn {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #4285f4;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn:hover {
+  background-color: #357ae8;
+}
+
+/* Result Box */
+#result {
+  background: #2c3e50;
+  border: 1px solid #1a252f;
+  padding: 15px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #f0f0f0;
+
+  /* Add scrollbars if content is large */
+  max-height: 400px;
+  max-width: 200%;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Table Styles inside the Result Box */
+#result table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed; /* So columns don't expand too wide */
+}
+
+#result th,
+#result td {
+  border: 1px solid #1a252f;
+  padding: 8px;
+  word-wrap: break-word; /* Wrap long text */
+}

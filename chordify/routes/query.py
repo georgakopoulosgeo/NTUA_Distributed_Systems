@@ -30,11 +30,14 @@ def query():
         origin = request.args.get("origin")
         if not origin:
             origin = f"{node.ip}:{node.port}"
-        #print(f"[{node.ip}:{node.port}] Processing wildcard query with origin {origin}")
-        all_songs = node.query_wildcard(origin)
-        # Add last line in dictionary the number of songs
-        all_songs["songs_count"] = len(all_songs)
-        return jsonify({"all_songs": all_songs}), 200
+        all_node_songs = node.query_wildcard(origin)
+        # Optionally, compute the total number of songs across nodes.
+        total_songs = sum(len(songs) for songs in all_node_songs.values())
+        return jsonify({
+            "all_songs": all_node_songs,
+            "songs_count": total_songs,
+            "nodes_count": len(all_node_songs)
+        }), 200
 
     result , req_id = node.query(key, origin, chain_count)
 

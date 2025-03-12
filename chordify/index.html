@@ -2,68 +2,187 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Distributed Systems Client</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
     <h1>Distributed Systems Client</h1>
-    <div class="form-section">
+
+    <!-- Start Section -->
+    <div id="start-section" class="form-section">
+      <h2>Connect to a Node</h2>
       <label for="nodeAddress">Node Address (ip:port):</label>
       <input type="text" id="nodeAddress" placeholder="e.g., 127.0.0.1:8001" />
+      <button class="btn" onclick="startClient()">Let's Start</button>
     </div>
-    <div class="form-section">
-      <h2>Insert</h2>
-      <label for="insertKey">Key:</label>
-      <input type="text" id="insertKey" />
-      <label for="insertValue">Value:</label>
-      <textarea id="insertValue"></textarea>
-      <button class="btn" onclick="handleInsert()">Insert</button>
+    <!-- End Start Section -->
+
+    <!-- Commands Section -->
+    <div id="commands-section" style="display: none;">
+      <div class="form-section">
+        <h2>Connected to Node: <span id="currentNode"></span></h2>
+      </div>
+
+      <div class="form-section">
+        <h2>Insert a Song</h2>
+        <label for="insertKey">Key:</label>
+        <input type="text" id="insertKey" />
+        <label for="insertValue">Value:</label>
+        <textarea id="insertValue"></textarea>
+        <button class="btn" onclick="handleInsert()">Insert</button>
+      </div>
+
+      <div class="form-section">
+        <h2>Query a Song</h2>
+        <label for="queryKey">Key:</label>
+        <input type="text" id="queryKey" />
+        <button class="btn" onclick="handleQuery()">Query</button>
+      </div>
+
+      <div class="form-section">
+        <h2>Delete a Song</h2>
+        <label for="deleteKey">Key:</label>
+        <input type="text" id="deleteKey" />
+        <button class="btn" onclick="handleDelete()">Delete</button>
+      </div>
+
+      <div class="form-section">
+        <h2>Overlay - Ring's Topology</h2>
+        <button class="btn" onclick="handleOverlay()">Overlay</button>
+      </div>
+
+      <div class="form-section">
+        <h2>Depart from Ring</h2>
+        <button class="btn" onclick="handleDepart()">Depart</button>
+      </div>
+
+      <!-- NEW EXIT BUTTON SECTION -->
+      <div class="form-section">
+        <h2>Exit</h2>
+        <button class="btn" onclick="handleExit()">Exit</button>
+      </div>
+
+      <div class="form-section">
+        <h2>Result</h2>
+        <div id="result"></div>
+      </div>
     </div>
-    <div class="form-section">
-      <h2>Query</h2>
-      <label for="queryKey">Key:</label>
-      <input type="text" id="queryKey" />
-      <button class="btn" onclick="handleQuery()">Query</button>
-    </div>
-    <div class="form-section">
-      <h2>Delete</h2>
-      <label for="deleteKey">Key:</label>
-      <input type="text" id="deleteKey" />
-      <button class="btn" onclick="handleDelete()">Delete</button>
-    </div>
-    <div class="form-section">
-      <h2>Join</h2>
-      <label for="joinIp">IP:</label>
-      <input type="text" id="joinIp" />
-      <label for="joinPort">Port:</label>
-      <input type="text" id="joinPort" />
-      <label for="joinId">Node ID:</label>
-      <input type="text" id="joinId" />
-      <button class="btn" onclick="handleJoin()">Join</button>
-    </div>
-    <div class="form-section">
-      <h2>Depart</h2>
-      <button class="btn" onclick="handleDepart()">Depart</button>
-    </div>
-    <div class="form-section">
-      <h2>Overlay</h2>
-      <button class="btn" onclick="handleOverlay()">Overlay</button>
-    </div>
-    <div class="form-section">
-      <h2>Result</h2>
-      <div id="result"></div>
-    </div>
+    <!-- End Commands Section -->
   </div>
 
   <script>
-    function getNodeAddress() {
-      return document.getElementById('nodeAddress').value.trim();
+    // Global variable to store the current node address
+    let currentNodeAddress = '';
+
+    // Start the client after entering node address
+    function startClient() {
+      const node = document.getElementById('nodeAddress').value.trim();
+      if (!node) {
+        alert('Please enter a Node Address (ip:port).');
+        return;
+      }
+      currentNodeAddress = node;
+
+      // Switch from Start Section to Commands Section
+      document.getElementById('start-section').style.display = 'none';
+      document.getElementById('commands-section').style.display = 'block';
+      document.getElementById('currentNode').textContent = currentNodeAddress;
+
+      // Clear any previous result
+      document.getElementById('result').innerHTML = '';
     }
 
-    function displayResult(data) {
-      document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+    function displayResult(data, operation) {
+      const resultContainer = document.getElementById('result');
+      resultContainer.innerHTML = ''; // Clear previous content
+
+      if (!data) {
+        resultContainer.textContent = 'No data received.';
+        return;
+      }
+
+      switch (operation) {
+        case 'insert':
+          if (data.result === true) {
+            resultContainer.innerHTML = `
+              <p><strong>Insert Successful!</strong></p>
+              <p>${data.message}</p>
+            `;
+          } else {
+            resultContainer.innerHTML = `
+              <p><strong>Insert Failed:</strong> ${data.error || 'Unknown error'}</p>
+            `;
+          }
+          break;
+
+        case 'query':
+          if (data.result === true) {
+            resultContainer.innerHTML = `
+              <p><strong>Query Success!</strong></p>
+              <p><strong>Value:</strong> ${data.value}</p>
+              <p><strong>Source:</strong> ${data.source}</p>
+            `;
+          } else {
+            resultContainer.innerHTML = `
+              <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
+            `;
+          }
+          break;
+
+        case 'delete':
+          if (data.result === true) {
+            resultContainer.innerHTML = `
+              <p><strong>Delete Successful!</strong></p>
+              <p>${data.message}</p>
+            `;
+          } else {
+            resultContainer.innerHTML = `
+              <p><strong>Delete Failed:</strong> ${data.error || 'Unknown error'}</p>
+            `;
+          }
+          break;
+
+        case 'overlay':
+          if (data.ring && Array.isArray(data.ring)) {
+            let html = '<h3>Overlay Ring</h3>';
+            html += '<table>';
+            html += '<tr><th>IP</th><th>Port</th><th>Predecessor</th><th>Successor</th></tr>';
+            data.ring.forEach(nodeInfo => {
+              html += `
+                <tr>
+                  <td>${nodeInfo.ip}</td>
+                  <td>${nodeInfo.port}</td>
+                  <td>${JSON.stringify(nodeInfo.predecessor) || 'N/A'}</td>
+                  <td>${JSON.stringify(nodeInfo.successor) || 'N/A'}</td>
+                </tr>
+              `;
+            });
+            html += '</table>';
+            resultContainer.innerHTML = html;
+          } else {
+            resultContainer.textContent = JSON.stringify(data, null, 2);
+          }
+          break;
+
+        case 'depart':
+          if (data.result === true) {
+            resultContainer.innerHTML = `
+              <p><strong>Depart Successful!</strong></p>
+              <p>${data.message}</p>
+            `;
+          } else {
+            resultContainer.innerHTML = `
+              <p><strong>Depart Failed:</strong> ${data.error || 'Unknown error'}</p>
+            `;
+          }
+          break;
+
+        default:
+          // Fallback to raw JSON if operation not recognized
+          resultContainer.textContent = JSON.stringify(data, null, 2);
+      }
     }
 
     function displayError(error) {
@@ -71,98 +190,94 @@
     }
 
     function handleInsert() {
-      const node = getNodeAddress();
       const key = document.getElementById('insertKey').value.trim();
       const value = document.getElementById('insertValue').value.trim();
-      if (!node || !key || !value) {
+      if (!currentNodeAddress || !key || !value) {
         alert('Please fill out all fields for Insert.');
         return;
       }
-      fetch(`http://${node}/insert`, {
+      fetch(`http://${currentNodeAddress}/insert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })
       })
       .then(response => response.json())
-      .then(data => displayResult(data))
+      .then(data => displayResult(data, 'insert'))
       .catch(err => displayError(err));
     }
 
     function handleQuery() {
-      const node = getNodeAddress();
       const key = document.getElementById('queryKey').value.trim();
-      if (!node || !key) {
+      if (!currentNodeAddress || !key) {
         alert('Please fill out all fields for Query.');
         return;
       }
-      fetch(`http://${node}/local_query?key=${encodeURIComponent(key)}`)
+      fetch(`http://${currentNodeAddress}/query?key=${encodeURIComponent(key)}`)
       .then(response => response.json())
-      .then(data => displayResult(data))
+      .then(data => displayResult(data, 'query'))
       .catch(err => displayError(err));
     }
 
     function handleDelete() {
-      const node = getNodeAddress();
       const key = document.getElementById('deleteKey').value.trim();
-      if (!node || !key) {
+      if (!currentNodeAddress || !key) {
         alert('Please fill out all fields for Delete.');
         return;
       }
-      fetch(`http://${node}/delete`, {
+      fetch(`http://${currentNodeAddress}/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key })
       })
       .then(response => response.json())
-      .then(data => displayResult(data))
+      .then(data => displayResult(data, 'delete'))
       .catch(err => displayError(err));
     }
 
-    function handleJoin() {
-      const node = getNodeAddress();
-      const ip = document.getElementById('joinIp').value.trim();
-      const port = document.getElementById('joinPort').value.trim();
-      const id = document.getElementById('joinId').value.trim();
-      if (!node || !ip || !port || !id) {
-        alert('Please fill out all fields for Join.');
-        return;
-      }
-      fetch(`http://${node}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip, port, id })
-      })
-      .then(response => response.json())
-      .then(data => displayResult(data))
-      .catch(err => displayError(err));
-    }
-
-    function handleDepart() {
-      const node = getNodeAddress();
-      if (!node) {
+    function handleOverlay() {
+      if (!currentNodeAddress) {
         alert('Please enter the Node Address.');
         return;
       }
-      fetch(`http://${node}/depart`, {
+      fetch(`http://${currentNodeAddress}/overlay`)
+      .then(response => response.json())
+      .then(data => displayResult(data, 'overlay'))
+      .catch(err => displayError(err));
+    }
+
+    // "Depart" = remove node from ring
+    function handleDepart() {
+      if (!currentNodeAddress) {
+        alert('No node address set. Please connect first.');
+        return;
+      }
+      fetch(`http://${currentNodeAddress}/depart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       })
       .then(response => response.json())
-      .then(data => displayResult(data))
+      .then(data => {
+        displayResult(data, 'depart');
+        // After departing, go back to start section
+        document.getElementById('start-section').style.display = 'block';
+        document.getElementById('commands-section').style.display = 'none';
+        currentNodeAddress = '';
+        document.getElementById('nodeAddress').value = '';
+      })
       .catch(err => displayError(err));
     }
 
-    function handleOverlay() {
-      const node = getNodeAddress();
-      if (!node) {
-        alert('Please enter the Node Address.');
-        return;
-      }
-      fetch(`http://${node}/overlay`)
-      .then(response => response.json())
-      .then(data => displayResult(data))
-      .catch(err => displayError(err));
+    // "Exit" = just go back to start, without removing node from ring
+    function handleExit() {
+      // Hide commands section, show start section
+      document.getElementById('start-section').style.display = 'block';
+      document.getElementById('commands-section').style.display = 'none';
+
+      // Clear out node address and any results
+      currentNodeAddress = '';
+      document.getElementById('nodeAddress').value = '';
+      document.getElementById('result').innerHTML = '';
     }
   </script>
 </body>
