@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="container">
-    <h1> Chordify</h1>
+    <h1>Chordify</h1>
 
     <!-- Start Section -->
     <div id="start-section" class="form-section">
@@ -19,7 +19,7 @@
     </div>
     <!-- End Start Section -->
 
-<!-- Commands Section -->
+    <!-- Commands Section -->
     <div id="commands-section" style="display: none;">
 
       <!-- Connected Node Message -->
@@ -77,11 +77,25 @@
         <div id="result"></div>
       </div>
 
-</div>
+    </div>
+  </div>
 
   <script>
     // Global variable to store the current node address
     let currentNodeAddress = '';
+
+    function getUniqueSong(songStr) {
+    // Split by " | " delimiter and remove extra whitespace
+    const parts = songStr.split(" | ").map(s => s.trim());
+    // Deduplicate (case-insensitive)
+    const unique = [];
+    parts.forEach(part => {
+      if (part && !unique.some(x => x.toLowerCase() === part.toLowerCase())) {
+        unique.push(part);
+      }
+    });
+    return unique.join(" | ");
+  }
 
     // Start the client after entering node address
     function startClient() {
@@ -125,46 +139,59 @@
           break;
 
           case 'query':
-            // Instead of checking data.value, check for data.result (the string)
-            if (data.result !== undefined) {
-              resultContainer.innerHTML = `
-                <p><strong>Query Success!</strong></p>
-                <p><strong>Value:</strong> ${data.result}</p>
-                <p><strong>Source:</strong> ${data["Result from"]}</p>
-              `;
-            } else {
-              resultContainer.innerHTML = `
-                <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
-              `;
-            }
-            break;
+        // If this is a wildcard query response (query key "*")
+        if (data.all_songs !== undefined) {
+          let html = `<h3>Query * Results:</h3>`;
+          html += `<p><strong>Nodes Count:</strong> ${data.nodes_count}</p>`;
+          html += `<p><strong>Original Songs Count:</strong> ${data.original_songs_count}</p>`;
+          html += `<p><strong>Replica Songs Count:</strong> ${data.replica_songs_count}</p>`;
           
-          case 'query':
-            if (data.value !== undefined) {
-              resultContainer.innerHTML = `
-                <p><strong>Query Success!</strong></p>
-                <p><strong>Value:</strong> ${data.value}</p>
-                <p><strong>Source:</strong> ${data.source}</p>
-              `;
+          // Iterate over each node in the response
+          for (const node in data.all_songs) {
+            html += `<div class="node-result" style="margin-bottom: 20px; border: 1px solid #555; padding: 10px; border-radius: 5px;">`;
+            html += `<h4>${node}</h4>`;
+            
+            // Process original songs
+            const originalSongs = data.all_songs[node].original_songs;
+            if (Object.keys(originalSongs).length > 0) {
+              html += `<p><strong>Original Songs:</strong></p><ul>`;
+              for (const songKey in originalSongs) {
+                const songValue = originalSongs[songKey];
+                const uniqueSong = getUniqueSong(songValue);
+                html += `<li>${uniqueSong}</li>`;
+              }
+              html += `</ul>`;
             } else {
-              resultContainer.innerHTML = `
-                <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
-              `;
+              html += `<p><strong>Original Songs:</strong> None</p>`;
             }
-            break;
-
-        case 'delete':
-          if (data.result === true) {
-            resultContainer.innerHTML = `
-              <p><strong>Delete Successful!</strong></p>
-              <p>${data.message}</p>
-            `;
-          } else {
-            resultContainer.innerHTML = `
-              <p><strong>Delete Failed:</strong> ${data.error || 'Unknown error'}</p>
-            `;
+            
+            // Process replica songs
+            const replicaSongs = data.all_songs[node].replica_songs;
+            if (Object.keys(replicaSongs).length > 0) {
+              html += `<p><strong>Replica Songs:</strong></p><ul>`;
+              for (const songKey in replicaSongs) {
+                const songValue = replicaSongs[songKey];
+                const uniqueSong = getUniqueSong(songValue);
+                html += `<li>${uniqueSong}</li>`;
+              }
+              html += `</ul>`;
+            } else {
+              html += `<p><strong>Replica Songs:</strong> None</p>`;
+            }
+            html += `</div>`;
           }
-          break;
+          resultContainer.innerHTML = html;
+        }
+        // Otherwise, handle regular query responses
+        else if (data.result !== undefined) {
+        // Deduplicate the song names before displaying
+        const uniqueResult = getUniqueSong(data.result);
+        resultContainer.innerHTML = `
+          <p><strong>Query Success!</strong></p>
+          <p><strong>Value:</strong> ${uniqueResult}</p>
+          <p><strong>Source:</strong> ${data["Result from"] || data.source}</p>
+        `;} 
+        break;
 
         case 'overlay':
           if (data.ring && Array.isArray(data.ring)) {
@@ -290,9 +317,9 @@
       .catch(err => displayError(err));
     }
 
-    // "Exit" = just go back to start, without removing node from ring
+    // "Exit" = just go back to start
     function handleExit() {
-      // Hide commands section, show start section
+      // show start section
       document.getElementById('start-section').style.display = 'block';
       document.getElementById('commands-section').style.display = 'none';
 
