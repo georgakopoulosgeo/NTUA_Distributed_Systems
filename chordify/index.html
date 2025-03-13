@@ -142,9 +142,9 @@
         // If this is a wildcard query response (query key "*")
         if (data.all_songs !== undefined) {
           let html = `<h3>Query * Results:</h3>`;
-          html += `<p><strong>Nodes Count:</strong> ${data.nodes_count}</p>`;
-          html += `<p><strong>Original Songs Count:</strong> ${data.original_songs_count}</p>`;
-          html += `<p><strong>Replica Songs Count:</strong> ${data.replica_songs_count}</p>`;
+          html += `<p><strong>Number of Nodes:</strong> ${data.nodes_count}</p>`;
+          html += `<p><strong>Original Songs:</strong> ${data.original_songs_count}</p>`;
+          html += `<p><strong>Replica Songs:</strong> ${data.replica_songs_count}</p>`;
           
           // Iterate over each node in the response
           for (const node in data.all_songs) {
