@@ -21,8 +21,8 @@ def node_info():
         "data_store": node.data_store,
         "replication_factor": node.replication_factor,
         "consistency_mode": node.consistency_mode,
-        #"successor": node.successor,
-        #"predecessor": node.predecessor,
+        "successor": node.successor,
+        "predecessor": node.predecessor,
         # Optionally, include details on pending requests if desired:
         #"pending_requests_count": len(node.pending_requests)
     }

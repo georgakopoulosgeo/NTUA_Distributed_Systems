@@ -1,4 +1,5 @@
 import hashlib
+from flask import current_app
 import requests
 import threading
 import uuid
@@ -32,7 +33,8 @@ class Node:
     # Update the node's ID
     def update_local_pointers(self, ring):
         for node_info in ring:
-            if node_info["id"] == self.id:
+            print(f"[{self.ip}:{self.port}] Checking node: {node_info}")
+            if node_info['id'] == self.id:
                 self.successor = node_info["successor"]
                 self.predecessor = node_info["predecessor"]
                 print(f"[{self.ip}:{self.port}] Updated local pointers: successor={self.successor}, predecessor={self.predecessor}")
@@ -42,8 +44,12 @@ class Node:
 
     # Update the node's successor and predecessor
     def update_neighbors(self, successor, predecessor):
-        self.successor = successor
-        self.predecessor = predecessor
+        # If successor or predecessor are empty dictionaries, do not update them.
+        # Might occur when the node is the only one in the ring or during a depart of a node.
+        if successor: 
+            self.successor = successor
+        if predecessor:
+            self.predecessor = predecessor
     
     # Update the node's consistency mode and replication factor
     def update_replication_consistency(self, replication_factor, consistency):
@@ -180,6 +186,10 @@ class Node:
 
     # Performs asynchronous replication for eventual consistency.
     def async_replicate_insert(self, key: str, value: str, replication_count: int):
+        if "ip" not in self.successor:
+            print(f"[{self.ip}:{self.port}] Error: No successor found for async replication.")
+            return False
+
         # time.sleep(0.3)  # Simulate a delay in the replication process.
         if key not in self.data_store: # The node that is responsible for the key should not have a stale replica.
             if key in self.replica_store:
@@ -491,11 +501,9 @@ class Node:
             return {"result": True, "message": "Delete forwarded."}
 
     def chain_replicate_delete(self, key: str, replication_count: int) -> bool:
-        """
-        Perform synchronous chain deletion replication for linearizability.
-        In this approach, replicas store the key in replica_store,
-        so remove it from replica_store here, then forward if needed.
-        """
+        # Perform synchronous chain deletion replication for linearizability.
+        # In this approach, replicas store the key in replica_store,
+        # so remove it from replica_store here, then forward if needed.
         # Remove from replica_store (because this node is a replica in the chain)
         if key in self.replica_store:
             del self.replica_store[key]
@@ -526,10 +534,8 @@ class Node:
             return True
 
     def async_replicate_delete(self, key: str, replication_count: int):
-        """
-        Perform asynchronous deletion replication.
-        Delete the key from the replica store and propagate asynchronously.
-        """
+        # Perform asynchronous deletion replication.
+        # Delete the key from the replica store and propagate asynchronously.
         if key in self.replica_store:
             del self.replica_store[key]
             print(f"[{self.ip}:{self.port}] Asynchronously deleted replica for key '{key}'.")
@@ -550,13 +556,14 @@ class Node:
             return True
 
     def join(self, bootstrap_ip, bootstrap_port):
-        # Ο κόμβος που δεν είναι bootstrap καλεί αυτή τη μέθοδο για να εισέλθει στο δίκτυο.
-        # Στέλνει αίτημα στον bootstrap κόμβο.
+        # Main method for a node to join the ring.
+        # Non bootstrap node joining the ring. Send a POST request to the bootstrap node.
         url = f"http://{bootstrap_ip}:{bootstrap_port}/join"
         payload = {'ip': self.ip, 'port': self.port, 'id': self.id}
         try:
             response = requests.post(url, json=payload)
             if response.status_code == 200:
+                # After the bootstrap node responds, and has aprroved the join, the node can update its fields.
                 data = response.json()
                 self.successor = data.get('successor')
                 self.predecessor = data.get('predecessor')
@@ -615,16 +622,8 @@ class Node:
             return False
         
     def cleanup_replicas(self, ring, replication_factor):
-        """
-        Remove replica keys from this node's replica_store that are no longer valid
-        according to the new ring ordering.
-        
-        For each key:
-        - Determine the primary node: the first node in ring whose id is >= key's hash 
-            (wrapping around if necessary).
-        - The valid replica holders are the next replication_factor-1 nodes.
-        - If this node's id is not among the valid replica holders, delete the key.
-        """
+        # Remove replica keys from this node's replica_store that are no longer valid
+        # according to the new ring ordering.
         keys_to_remove = []
         ring_len = len(ring)
         for key in list(self.replica_store.keys()):
@@ -644,6 +643,7 @@ class Node:
             for j in range(1, replication_factor):
                 valid_replicas.append(ring[(primary_index + j) % ring_len]["id"])
 
+            # If this node's id is not among the valid replica holders, delete the key.
             if self.id not in valid_replicas:
                 keys_to_remove.append(key)
 
@@ -656,22 +656,21 @@ class Node:
 
         
     def pull_neighbors(self):
-        # 
-            # New method: the node can later pull updated neighbor info from the bootstrap.
-            url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/get_neighbors"
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    data = response.json()
-                    self.update_neighbors(data.get('successor'), data.get('predecessor'))
-                    print(f"[{self.ip}:{self.port}] Neighbors updated via pull: successor={self.successor}, predecessor={self.predecessor}")
-                    return True
-                else:
-                    print(f"Pull neighbors failed: {response.text}")
-                    return False
-            except Exception as e:
-                print("Error pulling neighbors:", e)
+        # New method: the node can later pull updated neighbor info from the bootstrap.
+        url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/get_neighbors"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                self.update_neighbors(data.get('successor'), data.get('predecessor'))
+                print(f"[{self.ip}:{self.port}] Neighbors updated via pull: successor={self.successor}, predecessor={self.predecessor}")
+                return True
+            else:
+                print(f"Pull neighbors failed: {response.text}")
                 return False
+        except Exception as e:
+            print("Error pulling neighbors:", e)
+            return False
 
     # Method for gracefully departing from the ring.            
     def depart(self):
@@ -723,11 +722,9 @@ class Node:
         except Exception as e:
             print(f"Error transferring keys to successor: {e}")
 
-        # Clean up local stores.
-        self.data_store.clear()
-        self.replica_store.clear()
+        print(f"[{self.ip}:{self.port}] Departing gracefully from the ring. Still in depart")
 
-        # NEW STEP: Notify the bootstrap to remove this node from the ring.
+        # Notify the bootstrap to remove this node from the ring.
         updated_ring = []
         try:
             remove_url = f"http://{self.bootstrap_ip}:{self.bootstrap_port}/remove_node"
@@ -740,7 +737,8 @@ class Node:
             if remove_response.status_code == 200:
                 updated_ring = remove_response.json().get("ring", [])
                 print(f"[{self.ip}:{self.port}] Received updated ring: {updated_ring}")
-                # --- Trigger cleanup on all nodes in the updated ring ---
+                
+                # Trigger cleanup on all nodes in the updated ring 
                 for node_info in updated_ring:
                     node_ip = node_info["ip"]
                     node_port = node_info["port"]
@@ -753,7 +751,8 @@ class Node:
                         requests.post(cleanup_url, json=payload, timeout=2)
                     except Exception as e:
                         print(f"Error triggering cleanup on node {node_ip}:{node_port}: {e}")
-                # --- And then trigger a repair step to fill in missing replicas ---
+                
+                # And then trigger a repair step to fill in missing replicas
                 for node_info in updated_ring:
                     node_ip = node_info["ip"]
                     node_port = node_info["port"]
@@ -770,7 +769,6 @@ class Node:
                 print(f"[{self.ip}:{self.port}] Failed to remove from ring: {remove_response.text}")
         except Exception as e:
             print(f"Error informing bootstrap to remove node: {e}")
-        # --- end NEW STEP ---
 
         # Clean up local stores.
         self.data_store.clear()
@@ -779,10 +777,8 @@ class Node:
         return True
 
     def cleanup_replicas(self, ring, replication_factor):
-        """
-        For each key in the replica_store, determine its valid replica holders.
-        If this node's id is not among the valid ones, remove the replica.
-        """
+        # For each key in the replica_store, determine its valid replica holders.
+        # If this node's id is not among the valid ones, remove the replica.
         keys_to_remove = []
         ring_len = len(ring)
         for key in list(self.replica_store.keys()):
@@ -809,11 +805,8 @@ class Node:
             print(f"[{self.ip}:{self.port}] Cleanup: no replicas removed")
 
     def repair_replicas(self, ring, replication_factor):
-        """
-        For each key in this node's data_store, re-initiate replication so that
-        the next replication_factor-1 nodes in the ring get the replica if they don't have it.
-        """
-        ring_len = len(ring)
+        # For each key in this node's data_store, re-initiate replication so that
+        # the next replication_factor-1 nodes in the ring get the replica if they don't have it.
         # Find this node's position in the ring.
         primary_index = None
         for i, node in enumerate(ring):
@@ -822,7 +815,10 @@ class Node:
                 break
         if primary_index is None:
             return
+        # Show ring:
+        print(f"[{self.ip}:{self.port}] Repair: Ring: {ring}")
 
+        #self.update_local_pointers(ring)
         for key, value in self.data_store.items():
             # Trigger asynchronous replication chain for each key.
             # This will push the key to the next (replication_factor-1) nodes.

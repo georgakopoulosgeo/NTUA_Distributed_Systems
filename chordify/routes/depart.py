@@ -76,6 +76,10 @@ def absorb_keys():
     data = request.get_json()
     keys = data.get("keys", {})
     replication_factor = data.get("replication_factor", 3)
+    ring = current_app.config.get('RING', [])
+    # Update local pointers so that node.successor is up-to-date.
+    if ring:
+        node.update_local_pointers(ring)
     
     # For each key from the departing node:
     for key, value in keys.items():
@@ -85,7 +89,7 @@ def absorb_keys():
         # The successor becomes the new primary for these keys.
         # Initiate replication so that the new chain becomes:
         # primary -> successor -> next node ... (with last node cleaning up stale replicas)
-        node.replicate_insert(key, value, replication_factor - 1)
+        node.async_replicate_insert(key, value, replication_factor - 1)
     
     print(f"[{node.ip}:{node.port}] Absorbed keys from departing node: {list(keys.keys())}")
     return jsonify({"message": "Keys absorbed and replication updated."}), 200

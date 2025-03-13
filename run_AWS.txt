@@ -1,0 +1,60 @@
+#############################################
+# AWS Deployment Commands
+#############################################
+
+# Reset changes.
+git restore *
+
+# Stop and remove all running containers.
+sudo docker rm -f $(sudo docker ps -aq)
+
+# Build the Docker image.
+sudo docker build -t chord-app .
+
+# Deploy the bootstrap node and one node on VM1.
+git pull
+cd chordify/scritps/
+sudo chmod +x deploy_bootstrap.sh
+sudo ./deploy_bootstrap.sh
+
+# Deploy two nodes on other VMs.
+git pull
+cd chordify/scritps/
+sudo chmod +x deploy_node.sh
+sudo ./deploy_node.sh
+
+# Run experiments (example with 4 nodes).
+python3 request_expirement.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 4
+
+# Change configuration: update replication factor and consistency mode.
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"replication_factor": 1, "consistency_mode": "linearizability"}' \
+     http://10.0.62.44:8000/update_settings
+
+#############################################
+# AWS Node Details (Sample)
+#############################################
+# Example node details:
+# 10.0.62.44:8000      -> Node 0
+# 10.0.62.183:8002     -> 24143611642021087769965016016911796183215422724
+# 10.0.62.48:8001      -> 75142041091136173815320167490110446356621531987
+# 10.0.62.4:8001       -> 100327599628895595809874772797002322028919969014
+# 10.0.62.44:8001      -> 295932134150687556341207193662481870356174536331
+# 10.0.62.217:8001     -> 411874805086580080154720257350036684338272740759
+# 10.0.62.48:8002      -> 547855836760873760974161719315521171288480286053
+# 10.0.62.183:8001     -> 739793560834826224520256699940780490425450258197
+# 10.0.62.4:8002       -> 1376187645279844781901574523592213044469256684617
+# 10.0.62.217:8002     -> 1395659438043788344394894604843344294049593540490
+
+#############################################
+# Additional AWS Commands
+#############################################
+
+# Get the network overlay on AWS.
+curl -X GET http://10.0.62.183:8001/overlay
+
+# Get node information on AWS.
+curl -X GET http://10.0.62.183:8001/nodeinfo
+
+# Query all keys in the DHT on AWS.
+curl -X GET "http://10.0.62.183:8001/query?key=*"
