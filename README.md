@@ -161,6 +161,8 @@ Start the client interface with:
 
 - Frontend Interface:
 When running on localhost, you can enable the web-based frontend to execute requests via a browser. The frontend offers similar functionalities as the CLI but in a more user-friendly visual format.
+![image](https://github.com/user-attachments/assets/a6c46621-dbdf-469f-a4bb-91527d1bd4ba)
+
 
 ## Experiments 
 For performance evaluation, the following experiments are conducted:
