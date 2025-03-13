@@ -8,73 +8,94 @@
 </head>
 <body>
   <div class="container">
-    <h1>Distributed Systems Client</h1>
+    <h1>Chordify</h1>
 
     <!-- Start Section -->
     <div id="start-section" class="form-section">
       <h2>Connect to a Node</h2>
       <label for="nodeAddress">Node Address (ip:port):</label>
       <input type="text" id="nodeAddress" placeholder="e.g., 127.0.0.1:8001" />
-      <button class="btn" onclick="startClient()">Let's Start</button>
+      <button class="btn" onclick="startClient()">Connect</button>
     </div>
     <!-- End Start Section -->
 
     <!-- Commands Section -->
     <div id="commands-section" style="display: none;">
-      <div class="form-section">
+
+      <!-- Connected Node Message -->
+      <div class="form-section connected-message">
         <h2>Connected to Node: <span id="currentNode"></span></h2>
       </div>
 
-      <div class="form-section">
-        <h2>Insert a Song</h2>
-        <label for="insertKey">Key:</label>
-        <input type="text" id="insertKey" />
-        <label for="insertValue">Value:</label>
-        <textarea id="insertValue"></textarea>
-        <button class="btn" onclick="handleInsert()">Insert</button>
+      <!-- First Row Operations -->
+      <div class="row">
+        <div class="form-section operation-box">
+          <h2>Insert a Song</h2>
+          <label for="insertKey">Key:</label>
+          <input type="text" id="insertKey" />
+          <label for="insertValue">Value:</label>
+          <textarea id="insertValue"></textarea>
+          <button class="btn" onclick="handleInsert()">Insert</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Query a Song</h2>
+          <label for="queryKey">Key:</label>
+          <input type="text" id="queryKey" />
+          <button class="btn" onclick="handleQuery()">Query</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Delete a Song</h2>
+          <label for="deleteKey">Key:</label>
+          <input type="text" id="deleteKey" />
+          <button class="btn" onclick="handleDelete()">Delete</button>
+        </div>
       </div>
 
-      <div class="form-section">
-        <h2>Query a Song</h2>
-        <label for="queryKey">Key:</label>
-        <input type="text" id="queryKey" />
-        <button class="btn" onclick="handleQuery()">Query</button>
+      <!-- Second Row Operations -->
+      <div class="row">
+        <div class="form-section operation-box">
+          <h2>Overlay - Ring's Topology</h2>
+          <button class="btn" onclick="handleOverlay()">Overlay</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Depart from Ring</h2>
+          <button class="btn" onclick="handleDepart()">Depart</button>
+        </div>
+
+        <div class="form-section operation-box">
+          <h2>Exit</h2>
+          <button class="btn" onclick="handleExit()">Exit</button>
+        </div>
       </div>
 
-      <div class="form-section">
-        <h2>Delete a Song</h2>
-        <label for="deleteKey">Key:</label>
-        <input type="text" id="deleteKey" />
-        <button class="btn" onclick="handleDelete()">Delete</button>
-      </div>
-
-      <div class="form-section">
-        <h2>Overlay - Ring's Topology</h2>
-        <button class="btn" onclick="handleOverlay()">Overlay</button>
-      </div>
-
-      <div class="form-section">
-        <h2>Depart from Ring</h2>
-        <button class="btn" onclick="handleDepart()">Depart</button>
-      </div>
-
-      <!-- NEW EXIT BUTTON SECTION -->
-      <div class="form-section">
-        <h2>Exit</h2>
-        <button class="btn" onclick="handleExit()">Exit</button>
-      </div>
-
-      <div class="form-section">
+      <!-- Result -->
+      <div class="form-section result-section">
         <h2>Result</h2>
         <div id="result"></div>
       </div>
+
     </div>
-    <!-- End Commands Section -->
   </div>
 
   <script>
     // Global variable to store the current node address
     let currentNodeAddress = '';
+
+    function getUniqueSong(songStr) {
+    // Split by " | " delimiter and remove extra whitespace
+    const parts = songStr.split(" | ").map(s => s.trim());
+    // Deduplicate (case-insensitive)
+    const unique = [];
+    parts.forEach(part => {
+      if (part && !unique.some(x => x.toLowerCase() === part.toLowerCase())) {
+        unique.push(part);
+      }
+    });
+    return unique.join(" | ");
+  }
 
     // Start the client after entering node address
     function startClient() {
@@ -117,32 +138,60 @@
           }
           break;
 
-        case 'query':
-          if (data.result === true) {
-            resultContainer.innerHTML = `
-              <p><strong>Query Success!</strong></p>
-              <p><strong>Value:</strong> ${data.value}</p>
-              <p><strong>Source:</strong> ${data.source}</p>
-            `;
-          } else {
-            resultContainer.innerHTML = `
-              <p><strong>Query Failed:</strong> ${data.error || 'Unknown error'}</p>
-            `;
+          case 'query':
+        // If this is a wildcard query response (query key "*")
+        if (data.all_songs !== undefined) {
+          let html = `<h3>Query * Results:</h3>`;
+          html += `<p><strong>Number of Nodes:</strong> ${data.nodes_count}</p>`;
+          html += `<p><strong>Original Songs:</strong> ${data.original_songs_count}</p>`;
+          html += `<p><strong>Replica Songs:</strong> ${data.replica_songs_count}</p>`;
+          
+          // Iterate over each node in the response
+          for (const node in data.all_songs) {
+            html += `<div class="node-result" style="margin-bottom: 20px; border: 1px solid #555; padding: 10px; border-radius: 5px;">`;
+            html += `<h4>${node}</h4>`;
+            
+            // Process original songs
+            const originalSongs = data.all_songs[node].original_songs;
+            if (Object.keys(originalSongs).length > 0) {
+              html += `<p><strong>Original Songs:</strong></p><ul>`;
+              for (const songKey in originalSongs) {
+                const songValue = originalSongs[songKey];
+                const uniqueSong = getUniqueSong(songValue);
+                html += `<li>${uniqueSong}</li>`;
+              }
+              html += `</ul>`;
+            } else {
+              html += `<p><strong>Original Songs:</strong> None</p>`;
+            }
+            
+            // Process replica songs
+            const replicaSongs = data.all_songs[node].replica_songs;
+            if (Object.keys(replicaSongs).length > 0) {
+              html += `<p><strong>Replica Songs:</strong></p><ul>`;
+              for (const songKey in replicaSongs) {
+                const songValue = replicaSongs[songKey];
+                const uniqueSong = getUniqueSong(songValue);
+                html += `<li>${uniqueSong}</li>`;
+              }
+              html += `</ul>`;
+            } else {
+              html += `<p><strong>Replica Songs:</strong> None</p>`;
+            }
+            html += `</div>`;
           }
-          break;
-
-        case 'delete':
-          if (data.result === true) {
-            resultContainer.innerHTML = `
-              <p><strong>Delete Successful!</strong></p>
-              <p>${data.message}</p>
-            `;
-          } else {
-            resultContainer.innerHTML = `
-              <p><strong>Delete Failed:</strong> ${data.error || 'Unknown error'}</p>
-            `;
-          }
-          break;
+          resultContainer.innerHTML = html;
+        }
+        // Otherwise, handle regular query responses
+        else if (data.result !== undefined) {
+        // Deduplicate the song names before displaying
+        const uniqueResult = getUniqueSong(data.result);
+        resultContainer.innerHTML = `
+          <p><strong>Query Success!</strong></p>
+          <p><strong>Value:</strong> ${uniqueResult}</p>
+          <p><strong>Source:</strong> ${data["Result from"] || data.source}</p>
+        `;} 
+        break;
 
         case 'overlay':
           if (data.ring && Array.isArray(data.ring)) {
@@ -268,9 +317,9 @@
       .catch(err => displayError(err));
     }
 
-    // "Exit" = just go back to start, without removing node from ring
+    // "Exit" = just go back to start
     function handleExit() {
-      // Hide commands section, show start section
+      // show start section
       document.getElementById('start-section').style.display = 'block';
       document.getElementById('commands-section').style.display = 'none';
 

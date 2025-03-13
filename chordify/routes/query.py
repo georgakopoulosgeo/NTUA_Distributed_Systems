@@ -26,20 +26,25 @@ def query():
 
     # --- Wildcard Query Handling ---
     if key == "*":
-        # For wildcard queries, use a single 'origin' parameter (ip:port) to track the initiator.
+        # Use a single 'origin' parameter to track the initiator.
         origin = request.args.get("origin")
         if not origin:
             origin = f"{node.ip}:{node.port}"
         all_node_songs = node.query_wildcard(origin)
-        # Optionally, compute the total number of songs across nodes.
-        total_songs = sum(len(songs) for songs in all_node_songs.values())
+
+        # Compute the total number of original and replica songs across nodes.
+        original_songs_count = sum(len(node_data.get("original_songs", {})) for node_data in all_node_songs.values())
+        replica_songs_count = sum(len(node_data.get("replica_songs", {})) for node_data in all_node_songs.values())
+        nodes_count = len(all_node_songs)
+
         return jsonify({
             "all_songs": all_node_songs,
-            "songs_count": total_songs,
-            "nodes_count": len(all_node_songs)
+            "original_songs_count": original_songs_count,
+            "replica_songs_count": replica_songs_count,
+            "nodes_count": nodes_count
         }), 200
 
-    result , req_id = node.query(key, origin, chain_count)
+    result, req_id = node.query(key, origin, chain_count)
 
     # If this node is the original requester, wait for the query callback.
     if origin is None:
