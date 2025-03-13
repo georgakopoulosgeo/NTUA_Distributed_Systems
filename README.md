@@ -1,52 +1,149 @@
-# Chordify: A Peer-to-Peer Song Sharing Application
+# Chordify
 
-Chordify is a peer-to-peer (P2P) music sharing application built on top of the Chord Distributed Hash Table (DHT) protocol. In this project, nodes share song metadata (where the song title is used as the key and a string representing the node’s address as the value). The system supports dynamic node join and graceful departure, data replication across multiple nodes, and two consistency modes—linearizability and eventual consistency.
+Chordify is a peer-to-peer (P2P) music sharing application built on top of the Chord Distributed Hash Table (DHT) protocol. In this project, nodes share song metadata (with the song title as the key and a string representing the node's address as the value). The system supports dynamic node joining and graceful departures, data replication across multiple nodes, and two consistency modes—linearizability and eventual consistency.
 
 This project was developed as part of the Distributed Systems course at the National Technical University of Athens (NTUA) for the 2024-2025 academic year.
+
 ---
 
 ## Table of Contents
 
-- [Introduction] (#introduction)
-- [Prerequisites] (#prerequisites)
-- [Docker Setup] (#docker-aetup)
-  - [Creating the Network] (#creating-the-network)
-  - [Running the Bootstrap] (#node-running-the-bootstrap-node)
-  - [Basic API Interactions] (#basic-api-interactions)
-- [Windows Commands] (#windows-commands)
-- [Docker Compose] (#docker-compose)
-- [Adding New Nodes] (#adding-new-nodes)
-- [Network Operations] (#network-operations)
-- [DHT Operations] (#dht-operations)
-- [AWS Deployment] (#aws-deployment)
-- [Additional Commands] (#additional-commands)
-- [Nodes Information] (#nodes-information)
-- [Experiments] (#experiments)
-- [Conclusion] (#conclusion)
-
-
-  Introduction
-Prerequisites
-Docker Setup
-Creating the Network
-Running the Bootstrap Node
-Basic API Interactions
-Windows Commands
-Docker Compose
-Adding New Nodes
-Network Operations
-DHT Operations
-AWS Deployment
-Additional Commands
-Nodes Information
-Experiments
-Conclusion
+- [Introduction](#introduction)
+- [Prerequisites](#prerequisites)
+- [Docker Setup](#docker-setup)
+  - [Creating the Network](#creating-the-network)
+  - [Running the Bootstrap Node](#running-the-bootstrap-node)
+  - [Basic API Interactions](#basic-api-interactions)
+- [Linux Commands](#linux-commands)
+- [Windows Commands](#windows-commands)
+- [Docker Compose](#docker-compose)
+- [Adding New Nodes](#adding-new-nodes)
+- [Network Operations](#network-operations)
+- [DHT Operations](#dht-operations)
+- [AWS Deployment](#aws-deployment)
+- [Experiments](#experiments)
+- [Conclusion](#conclusion)
 
 ---
 
-## Overview
+## Introduction
 
-Chordify is designed as a P2P song sharing system where:
+Chordify implements a simplified version of the Chord DHT protocol. Each node is responsible for a range of keys derived from applying the SHA1 hash on the combination `ip_address:port`. The basic operations include:
+
+- **insert(key, value):** Adds a new song or updates an existing one (by concatenating values).
+- **query(key):** Retrieves the value associated with a key; using `"*"` returns all key-value pairs across the DHT.
+- **delete(key):** Removes the key-value pair from the network.
+- **depart:** Allows a node to gracefully exit, updating its neighbors.
+- **overlay:** Displays the current network topology.
+
+The system supports data replication (with a configurable replication factor) and offers both linearizability (using quorum or chain replication) and eventual consistency options.
+
+---
+
+## Prerequisites
+
+- [Docker](https://www.docker.com/get-started)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+
+---
+
+## Docker Setup
+
+Create a Docker network for the Chordify application:
+
+```bash
+docker network create chord-network
+```
+### Running the Bootstrap Node
+Start the bootstrap node (the first, stable node in the system) with:
+```bash
+docker run --name bootstrap --network chord-network --env-file .env -p 8000:8000 --rm chordify python bootstrap.py
+```
+###Basic API Interactions
+After starting the bootstrap node, you can interact with the API:
+Update replication and consistency settings:
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"replication_factor": 3, "consistency_mode": "eventual"}' \
+     http://127.0.0.1:8000/update_settings
+```
+Insert a song:
+```bash
+curl -X POST http://127.0.0.1:8001/insert \
+     -H "Content-Type: application/json" \
+     -d '{"key": "song1", "value": "node8001"}'
+```
+Query a song:
+```bash
+curl -X GET "http://127.0.0.1:8001/query?key=song1"
+```
+###Linux Commands
+For users running on Windows, PowerShell commands replace the typical curl syntax:
+
+Insert a song:
+```bash
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1", "value": "Imagine"}'
+```
+Query a song:
+
+```bash
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/query?key=song1" -Method Get
+```
+Delete a song:
+
+```bash
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/delete" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1"}'
+```
+Display network overlay:
+
+```bash
+(Invoke-WebRequest -Uri "http://127.0.0.1:8001/overlay" -Method GET).Content
+```
+Depart from the network:
+
+```bash
+Invoke-WebRequest -Uri http://localhost:8001/depart -Method POST
+```
+###Windows Commands
+For users running on Windows, PowerShell commands replace the typical curl syntax:
+
+Insert a song:
+```bash
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1", "value": "Imagine"}'
+```
+Query a song:
+
+```bash
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/query?key=song1" -Method Get
+```
+Delete a song:
+
+```bash
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/delete" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"key": "song1"}'
+```
+Display network overlay:
+
+```bash
+(Invoke-WebRequest -Uri "http://127.0.0.1:8001/overlay" -Method GET).Content
+```
+Depart from the network:
+
+```bash
+Invoke-WebRequest -Uri http://localhost:8001/depart -Method POST
+```
 
 - **ID Assignment:** Each node gets a unique ID derived from the SHA1 hash of its `ip_address:port`.
 - **Core Operations:** Supports `insert`, `query`, and `delete` of key-value pairs. Duplicate inserts update (concatenate) the existing value.
