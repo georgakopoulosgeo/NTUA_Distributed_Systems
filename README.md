@@ -13,10 +13,10 @@ This project was developed as part of the Distributed Systems course at the Nati
 - [Docker Setup](#docker-setup)
   - [Creating the Network](#creating-the-network)
   - [Running the Bootstrap Node](#running-the-bootstrap-node)
-  - [Basic API Interactions](#basic-api-interactions)
+  - [Basc API Interactions](#basic-api-interactions)
 - [Linux Commands](#linux-commands)
 - [Windows Commands](#windows-commands)
-- [Docker Compose](#docker-compose)
+- [Docker Comipose](#docker-compose)
 - [Adding New Nodes](#adding-new-nodes)
 - [Network Operations](#network-operations)
 - [DHT Operations](#dht-operations)
@@ -38,201 +38,92 @@ Chordify implements a simplified version of the Chord DHT protocol. Each node is
 
 The system supports data replication (with a configurable replication factor) and offers both linearizability (using quorum or chain replication) and eventual consistency options.
 
----
+
+## Node Structure
+- Every node runs as a standalone server and client using Flask for HTTP-based communication. Nodes maintain pointers to their immediate neighbors in the ring.
+- Bootstrap Node: Acts as the gateway for new nodes to join the network. It provides new nodes with the initial routing information.
+- Replication: Data is replicated across multiple nodes for fault tolerance. The replication factor and consistency mode (linearizability or eventual consistency) are defined during initialization.
+- Communication: Nodes communicate asynchronously via HTTP, using a "fire, forget and callback" mechanism to enhance performance.
+
+## Consistency Models
+Chordify offers two consistency modes to handle data replication:
+
+### Linearizability
+- Definition: Guarantees that all replicas of a key are updated synchronously so that every read returns the most recent value.
+- Mechanism: Implemented via chain replication. Write operations are forwarded along a chain of nodes and are confirmed only when the tail node (which holds the most up-to-date data) completes the update.
+- Operation Impact:
+  - Insert/Delete: Slower response times due to the need for confirmation from all replicas.
+  - Query: Always returns the freshest value by reading from the tail node.
+
+### Eventual Consistency
+- Definition: Allows replicas to update asynchronously. Although not immediately consistent, the system will converge to a consistent state over time.
+- Mechanism: Writes are applied at the primary node, which immediately responds to the client while propagating the update to the replicas in the background.
+- Operation Impact:
+  - Insert/Delete: Faster responses, but there is a risk that queries might return stale data if updates haven’t fully propagated.
+  - Query: Can be served by any node, offering speed at the expense of potential temporary inconsistencies.
+
+For further details on these models and the performance implications of each operation under different settings, please refer to the detailed report provided with this project.
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/get-started)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+- [Docker](https://www.docker.com/get-started). 
+  - Debian Linux:
+
+    ```bash
+    sudo snap install docker
+    ```
+  - Windows: Follow the instructions at [Docker_Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+
+- Python 3.8 or higher
+- Required Python modules listed in `requirements.txt`:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    Alternatively, you can install the modules individually:
+
+    ```bash
+    pip install Flask flask-cors requests python-dotenv
+    ```
 
 
----
-
-## Docker Setup
+--- 
+## LocalHost Deployment - Docker (Debian Linux)
 ### Creating the Network
-Create a Docker network for the Chordify application:
+In /chordify, create a Docker network for the Chordify application and the chordify image:
 
 ```bash
-docker network create chord-network
+sudo docker network create chord-network
 ```
-### Running the Bootstrap Node
-Start the bootstrap node (the first, stable node in the system) with:
 ```bash
-docker run --name bootstrap --network chord-network --env-file .env -p 8000:8000 --rm chordify python bootstrap.py
+sudo docker build -t chordify .
 ```
----
 
-### Basic API Interactions
-After starting the bootstrap node, you can interact with the API:
-
-Update replication and consistency settings:
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"replication_factor": 3, "consistency_mode": "eventual"}' \
-     http://127.0.0.1:8000/update_settings
-```
-Insert a song:
-```bash
-curl -X POST http://127.0.0.1:8001/insert \
-     -H "Content-Type: application/json" \
-     -d '{"key": "song1", "value": "node8001"}'
-```
-Query a song:
-```bash
-curl -X GET "http://127.0.0.1:8001/query?key=song1"
-```
----
-
-## Linux Commands
-### For users running on Windows, PowerShell commands replace the typical curl syntax:
-
-Insert a song:
-```bash
-Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
-  -Method Post `
-  -Headers @{ "Content-Type" = "application/json" } `
-  -Body '{"key": "song1", "value": "Imagine"}'
-```
-Query a song:
-
-```bash
-Invoke-WebRequest -Uri "http://127.0.0.1:8001/query?key=song1" -Method Get
-```
-Delete a song:
-
-```bash
-Invoke-WebRequest -Uri "http://127.0.0.1:8001/delete" `
-  -Method Post `
-  -Headers @{ "Content-Type" = "application/json" } `
-  -Body '{"key": "song1"}'
-```
-Display network overlay:
-
-```bash
-(Invoke-WebRequest -Uri "http://127.0.0.1:8001/overlay" -Method GET).Content
-```
-Depart from the network:
-
-```bash
-Invoke-WebRequest -Uri http://localhost:8001/depart -Method POST
-```
----
-## Windows Commands
-### For users running on Windows, PowerShell commands replace the typical curl syntax:
-
-Insert a song:
-```bash
-Invoke-WebRequest -Uri "http://127.0.0.1:8001/insert" `
-  -Method Post `
-  -Headers @{ "Content-Type" = "application/json" } `
-  -Body '{"key": "song1", "value": "Imagine"}'
-```
-Query a song:
-
-```bash
-Invoke-WebRequest -Uri "http://127.0.0.1:8001/query?key=song1" -Method Get
-```
-Delete a song:
-
-```bash
-Invoke-WebRequest -Uri "http://127.0.0.1:8001/delete" `
-  -Method Post `
-  -Headers @{ "Content-Type" = "application/json" } `
-  -Body '{"key": "song1"}'
-```
-Display network overlay:
-
-```bash
-(Invoke-WebRequest -Uri "http://127.0.0.1:8001/overlay" -Method GET).Content
-```
-Depart from the network:
-
-```bash
-Invoke-WebRequest -Uri http://localhost:8001/depart -Method POST
-```
----
-
-## Docker Compose
-### To build and run the entire system using Docker Compose, use the following commands:
+### Create containers with Docker-Compose
+To build and run the entire system using Docker Compose, use the following commands:
 ```bash
 sudo docker-compose build
 sudo docker-compose up
 ```
----
-## Adding New Nodes
-### You can add new nodes to the network using the following commands (example for node5 and node6):
+These commands will create all containers specified in docker-compose.yml
 
-adding Node5 :
 
-```bash
-sudo docker run -d \
-    --network chordify_default \
-    --name node5 \
-    -v $(pwd):/app \
-    -e IP=node5 \
-    -e PORT=8005 \
-    -p 8005:8005 \
-    chordify \
-    python app.py --ip node5 --port 8005 --bootstrap_ip bootstrap --bootstrap_port 8000
-```
-Adding Node6 :
-```bash
-sudo docker run -d \
-    --network chordify_default \
-    --name node6 \
-    -v $(pwd):/app \
-    -e IP=node6 \
-    -e PORT=8006 \
-    -p 8006:8006 \
-    chordify \
-    python app.py --ip node6 --port 8006 --bootstrap_ip bootstrap --bootstrap_port 8000
-```
----
-## Network Operations
-### Get network overlay:
-
-```bash
-curl -X GET http://127.0.0.1:8001/overlay
-Depart a node (example on port 8002):
-```
-### Depart a node (example on port 8002):
-```bash
-curl -X POST http://localhost:8002/depart
-```
----
-
-## DHT Operations
-### Insert / Query / Delete
-Insert (from node3):
-
-```bash
-curl -X POST http://node3:8000/insert \
-     -H "Content-Type: application/json" \
-     -d '{"key": "Imagine"}'
-```
-Delete (song3 from node1):
-```bash
-curl -X POST http://127.0.0.1:8001/delete \
-     -H "Content-Type: application/json" \
-     -d '{"key": "song3"}'
-```
 ---
 
 ## AWS Deployment
-## The following commands outline the steps for deploying Chordify on AWS VMs:
+### The following commands outline the steps for deploying Chordify on AWS VMs:
 
 Reset the Git repository:
 
 ```bash
 git restore *
-Stop and remove all containers:
 ```
 Stop and remove all containers:
 
 ```bash
 
 sudo docker rm -f $(sudo docker ps -aq)
-Build the Docker image:
 ```
 Build the Docker image:
 ```bash
@@ -257,53 +148,19 @@ sudo chmod +x deploy_node.sh
 sudo ./deploy_node.sh
 ```
 
-Run experiments:
-Deploy two nodes on other VMs:
-```bash
-python3 request_expirement.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --num_nodes 4
-```
+## Client and Frontend Usage
+After deployment, you can interact with the Chordify network in two ways:
 
-Change replication and consistency settings (which also clears all songs):
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"replication_factor": 1, "consistency_mode": "linearizability"}' \
-     http://10.0.62.44:8000/update_settings
-```
+- Client CLI:
+Start the client interface with:
+  ```bash
+  python3 client.py
+  ```
 
-Node information examples (IP:port and node identifiers):
-```bash
-44:8000      -> Node 0
-183:8002     -> Node ID: 24143611642021087769965016016911796183215422724
-48:8001      -> Node ID: 75142041091136173815320167490110446356621531987
-4:8001       -> Node ID: 100327599628895595809874772797002322028919969014
-44:8001      -> Node ID: 295932134150687556341207193662481870356174536331
-217:8001     -> Node ID: 411874805086580080154720257350036684338272740759
-48:8002      -> Node ID: 547855836760873760974161719315521171288480286053
-183:8001     -> Node ID: 739793560834826224520256699940780490425450258197
-4:8002       -> Node ID: 1376187645279844781901574523592213044469256684617
-217:8002     -> Node ID: 1395659438043788344394894604843344294049593540490
-```
----
-## Additional Commands
-Get network overlay:
+  You will be prompted to enter the IP and port of the node to connect to. This CLI allows you to execute operations such as insert, query, delete, depart, and overlay.
 
-```bash
-
-curl -X GET http://10.0.62.183:8001/overlay
-```
-
-Get node information:
-
-```bash
-
-curl -X GET http://10.0.62.183:8001/nodeinfo
-```
-
-Query all keys in the DHT:
-```bash
-curl -X GET "http://10.0.62.183:8001/query?key=*"
-```
----
+- Frontend Interface:
+When running on localhost, you can enable the web-based frontend to execute requests via a browser. The frontend offers similar functionalities as the CLI but in a more user-friendly visual format.
 
 ## Experiments 
 For performance evaluation, the following experiments are conducted:
