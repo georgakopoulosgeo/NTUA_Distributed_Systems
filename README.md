@@ -178,6 +178,8 @@ Start the client interface for the node of your choice with:
   ```
 
   This CLI allows you to execute operations such as insert, query, delete, depart, and overlay.
+  ![image](https://github.com/user-attachments/assets/35b14840-ed49-43bb-82b5-e7ba4d2569e7)
+
 
 - Frontend Interface:
 When running on localhost, you can enable the web-based frontend to execute requests via a browser. The frontend offers similar functionalities as the CLI but in a more user-friendly visual format.
