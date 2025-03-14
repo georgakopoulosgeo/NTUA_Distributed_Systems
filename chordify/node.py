@@ -323,11 +323,20 @@ class Node:
     def _return_local_or_callback(self, key: str, origin: dict) -> (dict, str): # type: ignore
         local_value = self.data_store.get(key, self.replica_store.get(key, None))
         responding_node = f"{self.ip}:{self.port}"
-        result = {
-            "Result from": responding_node,
-            "key": key,
-            "result": local_value
-        }
+        if key in self.data_store:
+            result = {
+                "Result from": responding_node,
+                "Status": "Original Song",
+                "Key": key,
+                "Value": local_value
+            }
+        else:
+            result = {
+                "Result from": responding_node,
+                "Status": "Replica Song",
+                "Key": key,
+                "Value": local_value
+            }
 
          # If the key is not found locally, immediately return a "not found" result.
         if local_value is None:
@@ -473,20 +482,21 @@ class Node:
                     threading.Thread(target=self.async_replicate_delete, args=(key, self.replication_factor - 1)).start()
 
             # Callback or return
+            # Send callback to the origin
+            callback_url = f"http://{origin['ip']}:{origin['port']}/delete_response"
+            try:
+                requests.post(callback_url, json={
+                    "request_id": origin["request_id"],
+                    "final_result": final_result
+                }, timeout=2)
+                print(f"[{self.ip}:{self.port}] Delete processed; callback sent to origin {origin['ip']}:{origin['port']}")
+            except Exception as e:
+                print(f"Error sending delete callback: {e}")
             if origin is None or (origin["ip"] == self.ip and origin["port"] == self.port):
                 # We are the origin and can return directly
+                print(f"[{self.ip}:{self.port}] Delete processed; returning final result.")
                 return final_result
             else:
-                # Send callback to the origin
-                callback_url = f"http://{origin['ip']}:{origin['port']}/delete_response"
-                try:
-                    requests.post(callback_url, json={
-                        "request_id": origin["request_id"],
-                        "final_result": final_result
-                    }, timeout=2)
-                    print(f"[{self.ip}:{self.port}] Delete processed; callback sent to origin {origin['ip']}:{origin['port']}")
-                except Exception as e:
-                    print(f"Error sending delete callback: {e}")
                 return {"result": True, "message": "Delete processed; callback sent to origin."}
 
         else:

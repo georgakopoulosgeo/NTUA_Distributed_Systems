@@ -88,7 +88,7 @@ For further details on these models and the performance implications of each ope
     ```
 
 
---- 
+
 ## LocalHost Deployment - Docker (Debian Linux)
 ### Creating the Network
 In /chordify, create a Docker network for the Chordify application and the chordify image:
@@ -109,7 +109,6 @@ sudo docker-compose up
 These commands will create all containers specified in docker-compose.yml
 
 
----
 
 ## AWS Deployment
 ### The following commands outline the steps for deploying Chordify on AWS VMs:

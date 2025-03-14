@@ -7,19 +7,86 @@ from colorama import Fore, Style, init
 # Initialize colorama so ANSI escape sequences work on all platforms.
 init(autoreset=True)
 
+def display_insert_response(resp):
+    """
+    Formats and displays the insert response in a user-friendly way.
+    """
+    print(Fore.GREEN + "\n[Insert successful]" + Style.RESET_ALL)
+    message = resp.get("message", "No message provided")
+    print(Fore.CYAN + "Message:" + Style.RESET_ALL, message)
+    
+    ip = resp.get("ip", "N/A")
+    print(Fore.CYAN + "IP:" + Style.RESET_ALL, ip)
+    
+    data_store = resp.get("data_store", {})
+    if data_store:
+        print(Fore.CYAN + "Data Store:" + Style.RESET_ALL)
+        for key, value in data_store.items():
+            print(f"  {key}: {value}")
+    else:
+        print(Fore.CYAN + "Data Store:" + Style.RESET_ALL, "{}")
+    
+    result = resp.get("result", None)
+    if result is not None:
+        print(Fore.CYAN + "Result:" + Style.RESET_ALL, result)
+    print()
+
 def insert_cmd(node_addr, key, value):
     url = f"http://{node_addr}/insert"
     payload = {"key": key, "value": value}
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        print(Fore.GREEN + "\n[Insert successful]" + Style.RESET_ALL)
-        # Pretty-print the JSON response with an indent of 4 spaces.
-        formatted_output = json.dumps(response.json(), indent=4)
-        print(formatted_output)
-        print()  # blank line
+        resp_json = response.json()
+        display_insert_response(resp_json)
     except Exception as e:
         print(Fore.RED + "\n[Error during insert]" + Style.RESET_ALL, e)
+        print()
+
+def display_query_response(resp):
+    """
+    Formats and displays the query response in a user-friendly way.
+    This function handles both single key queries and the "*" query.
+    """
+    print(Fore.GREEN + "\n[Query result]" + Style.RESET_ALL)
+    # Check if the response is for the '*' query (all songs)
+    if "all_songs" in resp:
+        all_songs = resp.get("all_songs", {})
+        nodes_count = resp.get("nodes_count", "N/A")
+        original_songs_count = resp.get("original_songs_count", "N/A")
+        replica_songs_count = resp.get("replica_songs_count", "N/A")
+        print(Fore.CYAN + "Nodes Count:" + Style.RESET_ALL, nodes_count)
+        print(Fore.CYAN + "Original Songs Count:" + Style.RESET_ALL, original_songs_count)
+        print(Fore.CYAN + "Replica Songs Count:" + Style.RESET_ALL, replica_songs_count)
+        print()
+        for node, songs in all_songs.items():
+            print(Fore.CYAN + f"Node {node}:" + Style.RESET_ALL)
+            original = songs.get("original_songs", {})
+            replica = songs.get("replica_songs", {})
+            if original:
+                print("  " + Fore.YELLOW + "Original Songs:" + Style.RESET_ALL)
+                for k, v in original.items():
+                    print(f"    {k}: {v}")
+            else:
+                print("  " + Fore.YELLOW + "Original Songs:" + Style.RESET_ALL, "{}")
+            if replica:
+                print("  " + Fore.YELLOW + "Replica Songs:" + Style.RESET_ALL)
+                for k, v in replica.items():
+                    print(f"    {k}: {v}")
+            else:
+                print("  " + Fore.YELLOW + "Replica Songs:" + Style.RESET_ALL, "{}")
+            print("-" * 40)
+        print()
+    else:
+        # Single key query response
+        result_from = resp.get("Result from", "N/A")
+        status = resp.get("Status", "N/A")
+        key = resp.get("Key", "N/A")
+        result_value = resp.get("Value", "N/A")
+        print(Fore.CYAN + "Result from:" + Style.RESET_ALL, result_from)
+        print(Fore.CYAN + "Status:" + Style.RESET_ALL, status)
+        print(Fore.CYAN + "Key:" + Style.RESET_ALL, key)
+        print(Fore.CYAN + "Value:" + Style.RESET_ALL, result_value)
         print()
 
 def query_cmd(node_addr, key):
@@ -28,14 +95,35 @@ def query_cmd(node_addr, key):
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
-        print(Fore.GREEN + "\n[Query result]" + Style.RESET_ALL)
-        # Pretty-print the JSON response with an indent of 4 spaces.
-        formatted_output = json.dumps(response.json(), indent=4)
-        print(formatted_output)
-        print()  # blank line
+        resp_json = response.json()
+        display_query_response(resp_json)
     except Exception as e:
         print(Fore.RED + "\n[Error during query]" + Style.RESET_ALL, e)
         print()
+
+def display_delete_response(resp):
+    """
+    Formats and displays the delete response in a user-friendly way.
+    """
+    print(Fore.GREEN + "\n[Delete successful]" + Style.RESET_ALL)
+    message = resp.get("message", "No message provided")
+    print(Fore.CYAN + "Message:" + Style.RESET_ALL, message)
+    
+    ip = resp.get("ip", "N/A")
+    print(Fore.CYAN + "IP:" + Style.RESET_ALL, ip)
+    
+    data_store = resp.get("data_store", {})
+    if data_store:
+        print(Fore.CYAN + "Data Store:" + Style.RESET_ALL)
+        for key, value in data_store.items():
+            print(f"  {key}: {value}")
+    else:
+        print(Fore.CYAN + "Data Store:" + Style.RESET_ALL, "{}")
+    
+    result = resp.get("result", None)
+    if result is not None:
+        print(Fore.CYAN + "Result:" + Style.RESET_ALL, result)
+    print()
 
 def delete_cmd(node_addr, key):
     url = f"http://{node_addr}/delete"
@@ -43,28 +131,42 @@ def delete_cmd(node_addr, key):
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        print(Fore.GREEN + "\n[Delete successful]" + Style.RESET_ALL)
-        # Pretty-print the JSON response with an indent of 4 spaces.
-        formatted_output = json.dumps(response.json(), indent=4)
-        print(formatted_output)
-        print()  # blank line
+        resp_json = response.json()
+        display_delete_response(resp_json)
     except Exception as e:
         print(Fore.RED + "\n[Error during delete]" + Style.RESET_ALL, e)
         print()
 
+def display_overlay_info(info):
+    """
+    Formats and displays the overlay (ring) information in a user-friendly way.
+    """
+    print(Fore.GREEN + "\n[Overlay info]" + Style.RESET_ALL)
+    ring = info.get("ring", [])
+    if not ring:
+        print(Fore.CYAN + "No nodes in the ring." + Style.RESET_ALL)
+        return
+
+    for idx, node in enumerate(ring, start=1):
+        print(Fore.CYAN + f"Node {idx}:" + Style.RESET_ALL)
+        print("  " + Fore.YELLOW + "ID:" + Style.RESET_ALL, node.get("id"))
+        print("  " + Fore.YELLOW + "IP:" + Style.RESET_ALL, node.get("ip"))
+        print("  " + Fore.YELLOW + "Port:" + Style.RESET_ALL, node.get("port"))
+        print("  " + Fore.YELLOW + "Predecessor:" + Style.RESET_ALL, node.get("predecessor"))
+        print("  " + Fore.YELLOW + "Successor:" + Style.RESET_ALL, node.get("successor"))
+        print("-" * 40)
+    print()
+
 def overlay_cmd(node_addr):
     """
-    Retrieves and pretty-prints the overlay (ring) information.
+    Retrieves and displays the overlay (ring) information in a formatted manner.
     """
     url = f"http://{node_addr}/overlay"
     try:
         response = requests.get(url)
         response.raise_for_status()
-        print(Fore.GREEN + "\n[Overlay info]" + Style.RESET_ALL)
         overlay_data = response.json()
-        formatted_data = json.dumps(overlay_data, indent=4)
-        print(formatted_data)
-        print()  # blank line
+        display_overlay_info(overlay_data)
     except Exception as e:
         print(Fore.RED + "\n[Error during overlay]" + Style.RESET_ALL, e)
         print()
@@ -98,6 +200,56 @@ def depart_cmd(node_addr):
         print(Fore.RED + "\n[Error during depart]" + Style.RESET_ALL, e)
         print()
 
+def display_node_info(info):
+    """
+    Formats and displays the node information in a user-friendly way.
+    """
+    print(Fore.GREEN + "\n[Node info]" + Style.RESET_ALL)
+    print(Fore.CYAN + "Node ID:" + Style.RESET_ALL, info.get("id"))
+    print(Fore.CYAN + "IP:" + Style.RESET_ALL, info.get("ip"))
+    print(Fore.CYAN + "Port:" + Style.RESET_ALL, info.get("port"))
+    print(Fore.CYAN + "Consistency Mode:" + Style.RESET_ALL, info.get("consistency_mode"))
+    print(Fore.CYAN + "Replication Factor:" + Style.RESET_ALL, info.get("replication_factor"))
+    
+    # Optionally display data store and replica store if needed.
+    data_store = info.get("data_store")
+    if data_store:
+        print(Fore.CYAN + "Data Store:" + Style.RESET_ALL, data_store)
+    replica_store = info.get("replica_store")
+    if replica_store:
+        print(Fore.CYAN + "Replica Store:" + Style.RESET_ALL, replica_store)
+
+    # Format predecessor information.
+    predecessor = info.get("predecessor")
+    if predecessor:
+        print(Fore.CYAN + "Predecessor:" + Style.RESET_ALL)
+        print("  ID: ", predecessor.get("id"))
+        print("  IP: ", predecessor.get("ip"))
+        print("  Port: ", predecessor.get("port"))
+    
+    # Format successor information.
+    successor = info.get("successor")
+    if successor:
+        print(Fore.CYAN + "Successor:" + Style.RESET_ALL)
+        print("  ID: ", successor.get("id"))
+        print("  IP: ", successor.get("ip"))
+        print("  Port: ", successor.get("port"))
+    print()
+
+def nodeinfo_cmd(node_addr):
+    """
+    Retrieves the node information from the /nodeinfo endpoint and displays it nicely.
+    """
+    url = f"http://{node_addr}/nodeinfo"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        info = response.json()
+        display_node_info(info)
+    except Exception as e:
+        print(Fore.RED + "\n[Error during nodeinfo]" + Style.RESET_ALL, e)
+        print()
+
 def help_cmd():
     """
     Prints help information for all available commands.
@@ -108,6 +260,7 @@ Available commands:
     Query <key>           - Retrieve the value associated with a given key.
     Delete <key>          - Delete the key-value pair from the network.
     Overlay               - Display the current network overlay (topology).
+    Nodeinfo              - Display the node information.
     Depart                - Gracefully remove the node from the network and exit the client.
     Help                  - Show this help message.
     Exit                  - Quit the client.
@@ -121,6 +274,7 @@ def print_intro(node_addr):
     print("  Query <key>")
     print("  Delete <key>")
     print("  Overlay")
+    print("  Nodeinfo")
     print("  Depart")
     print("  Help")
     print(Fore.YELLOW + "Type 'Exit' to quit." + Style.RESET_ALL)
@@ -198,6 +352,13 @@ def main():
                 print()
                 continue
             overlay_cmd(node_addr)
+        
+        elif cmd == "nodeinfo":
+            if len(tokens) != 1:
+                print(Fore.RED + "Usage: Nodeinfo" + Style.RESET_ALL)
+                print()
+                continue
+            nodeinfo_cmd(node_addr)
 
         elif cmd == "depart":
             if len(tokens) != 1:

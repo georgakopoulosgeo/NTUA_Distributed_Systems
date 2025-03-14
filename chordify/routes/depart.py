@@ -50,6 +50,10 @@ def remove_node():
 @depart_bp.route("/depart", methods=["POST"])
 def depart():
     node = current_app.config['NODE']
+    replication_factor = node.replication_factor
+    ring = current_app.config.get('RING', [])
+    if replication_factor > len(ring):
+        return jsonify({"error": "Replication factor is larger than the ring size"}), 400
     if node.is_bootstrap:
         return jsonify({"error": "Bootstrap does not depart"}), 400
     else:
