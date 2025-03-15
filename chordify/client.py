@@ -175,6 +175,15 @@ def overlay_cmd(node_addr):
         print(Fore.RED + "\n[Error during overlay]" + Style.RESET_ALL, e)
         print()
 
+def display_depart_response(resp):
+    """
+    Formats and displays the depart response in a user-friendly way.
+    """
+    print(Fore.GREEN + "\n[Depart successful]" + Style.RESET_ALL)
+    message = resp.get("message", "No message provided")
+    print(Fore.CYAN + "Message:" + Style.RESET_ALL, message)
+    print()
+
 def depart_cmd(node_addr):
     """
     Sends a depart request to the target node and exits the client if the node departs gracefully.
@@ -183,11 +192,11 @@ def depart_cmd(node_addr):
     try:
         response = requests.post(url, json={})
         response.raise_for_status()
-        print(Fore.GREEN + "\n[Depart successful]" + Style.RESET_ALL)
-        departure_response = response.json()
-        print(departure_response)
-        print()  # blank line
 
+        departure_response = response.json()
+        display_depart_response(departure_response)
+
+        # Check if we should exit the client:
         if isinstance(departure_response, dict):
             message = departure_response.get("message", "").lower()
         elif isinstance(departure_response, str):
@@ -200,9 +209,11 @@ def depart_cmd(node_addr):
             sys.exit(0)
         else:
             sys.exit(0)
+
     except Exception as e:
         print(Fore.RED + "\n[Error during depart]" + Style.RESET_ALL, e)
         print()
+
 
 def display_node_info(info):
     """
@@ -383,7 +394,7 @@ def main():
             help_cmd()
 
         else:
-            print(Fore.RED + "Invalid command. Use Insert, Query, Delete, Overlay, Depart, Help, or Exit." + Style.RESET_ALL)
+            print(Fore.RED + "Invalid command. Use Insert, Query, Delete, Overlay, Nodeinfo, Depart, Help, or Exit." + Style.RESET_ALL)
             print()
 
 if __name__ == "__main__":

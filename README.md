@@ -38,7 +38,6 @@ The SHA1-based hash function used to map keys to nodes in the DHT is:
 
 ```python
 import hashlib
-
 def compute_hash(key):
   h = hashlib.sha1(key.encode('utf-8')).hexdigest()
   return int(h, 16)
@@ -159,7 +158,8 @@ git pull
 ```
 
 ### Step 2: Stop and remove all containers, then build the Docker image
-Make sure there are no previous containers running and build the Docker image:
+Make sure there are no previous containers running and build the Docker image.
+Run these commands in **/chordify**
 
 ```bash
 sudo docker rm -f $(sudo docker ps -aq)
@@ -171,7 +171,7 @@ Deploy the bootstrap node and additional nodes on the VMs:
 
 ```bash
 cd chordify/scripts/
-sudo chmod +x deploy_bootstrap.sh deploy_node.sh
+sudo chmod +x deploy_bootstrap.sh deploy_nodes.sh
 ```
 For the first VM:
 ```bash
@@ -179,7 +179,7 @@ sudo ./deploy_bootstrap.sh
 ```
 For the other VMs:
 ```bash
-sudo ./deploy_node.sh
+sudo ./deploy_nodes.sh
 ```
 ## Client and Frontend Usage
 After deployment, you can interact with the Chordify network in two ways:
@@ -231,7 +231,16 @@ This experiment interleaves insert and query operations using a dedicated set of
   python3 request_experiment.py --bootstrap_ip <ip> --bootstrap_port <port> --num_nodes n
   ```
 
-The results of the experiments on AWS VMs, are saved in the **schordify/experiments/results/** folder.
+The results (.csv files) of the experiments on AWS VMs, are saved in the **schordify/experiments/results/** folder.
 
-####For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
+### Results
+When running the experiments on AWS with 10 nodes, we found that eventual consistency achieved significantly higher write and read throughputs with lower operation durations—especially at higher replication factors—while linearizability, despite its increased latency, consistently delivered fresher data with fewer stale reads.
 
+![image](https://github.com/user-attachments/assets/597072b4-190d-46c9-8ff6-13af2119c645)
+
+![image](https://github.com/user-attachments/assets/efba8d5c-69e7-4422-a5c3-8b91394cfa9e)
+
+![image](https://github.com/user-attachments/assets/e1520337-dccd-4f37-b95d-c39d2f086ccd)
+
+
+#### For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
