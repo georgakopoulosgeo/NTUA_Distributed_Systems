@@ -172,7 +172,7 @@ Deploy the bootstrap node and additional nodes on the VMs:
 
 ```bash
 cd chordify/scripts/
-sudo chmod +x deploy_bootstrap.sh deploy_node.sh
+sudo chmod +x deploy_bootstrap.sh deploy_nodes.sh
 ```
 For the first VM:
 ```bash
@@ -180,7 +180,7 @@ sudo ./deploy_bootstrap.sh
 ```
 For the other VMs:
 ```bash
-sudo ./deploy_node.sh
+sudo ./deploy_nodes.sh
 ```
 ## Client and Frontend Usage
 After deployment, you can interact with the Chordify network in two ways:
@@ -237,3 +237,8 @@ The results of the experiments on AWS VMs, are saved in the **schordify/experime
 #### For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
 
 ### Results
+![image](https://github.com/user-attachments/assets/597072b4-190d-46c9-8ff6-13af2119c645)
+![image](https://github.com/user-attachments/assets/efba8d5c-69e7-4422-a5c3-8b91394cfa9e)
+![image](https://github.com/user-attachments/assets/47e35e79-0b3e-43ef-a846-3c849bdfe531)
+
+
