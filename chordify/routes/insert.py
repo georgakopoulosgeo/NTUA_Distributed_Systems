@@ -122,7 +122,7 @@ def start_inserts():
     # Used for the 1st experiment.
     data = request.get_json()
     file_number = data.get("file_number", "00")  # default if missing
-    file_path = f"./expirements/insert/insert_{file_number}_part.txt"
+    file_path = f"./experiments/insert/insert_{file_number}_part.txt"
     node = current_app.config["NODE"]
     port = node.port
 

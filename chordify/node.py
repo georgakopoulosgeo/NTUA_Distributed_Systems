@@ -33,11 +33,11 @@ class Node:
     # Update the node's ID
     def update_local_pointers(self, ring):
         for node_info in ring:
-            print(f"[{self.ip}:{self.port}] Checking node: {node_info}")
+            #print(f"[{self.ip}:{self.port}] Checking node: {node_info}") # DEBUG
             if node_info['id'] == self.id:
                 self.successor = node_info["successor"]
                 self.predecessor = node_info["predecessor"]
-                print(f"[{self.ip}:{self.port}] Updated local pointers: successor={self.successor}, predecessor={self.predecessor}")
+                print(f"[{self.ip}:{self.port}] Updated local pointers") # DEBUG
                 return
         print(f"[{self.ip}:{self.port}] Warning: Could not update local pointers from the ring.")
 
@@ -328,14 +328,14 @@ class Node:
                 "Result from": responding_node,
                 "Status": "Original Song",
                 "Key": key,
-                "Value": local_value
+                "result": local_value 
             }
         else:
             result = {
                 "Result from": responding_node,
                 "Status": "Replica Song",
                 "Key": key,
-                "Value": local_value
+                "result": local_value
             }
 
          # If the key is not found locally, immediately return a "not found" result.
@@ -748,7 +748,7 @@ class Node:
             remove_response = requests.post(remove_url, json=data)
             if remove_response.status_code == 200:
                 updated_ring = remove_response.json().get("ring", [])
-                print(f"[{self.ip}:{self.port}] Received updated ring: {updated_ring}")
+                #print(f"[{self.ip}:{self.port}] Received updated ring: {updated_ring}") # DEBUG
                 
                 # Trigger cleanup on all nodes in the updated ring 
                 for node_info in updated_ring:
@@ -828,11 +828,11 @@ class Node:
         if primary_index is None:
             return
         # Show ring:
-        print(f"[{self.ip}:{self.port}] Repair: Ring: {ring}")
+        # print(f"[{self.ip}:{self.port}] Repair: Ring: {ring}") # DEBUG
 
         #self.update_local_pointers(ring)
         for key, value in self.data_store.items():
             # Trigger asynchronous replication chain for each key.
             # This will push the key to the next (replication_factor-1) nodes.
             self.async_replicate_insert(key, value, replication_factor - 1)
-        print(f"[{self.ip}:{self.port}] Repair: Re-initiated replication for keys: {list(self.data_store.keys())}")
+        #print(f"[{self.ip}:{self.port}] Repair: Re-initiated replication for keys: {list(self.data_store.keys())}") # DEBUG

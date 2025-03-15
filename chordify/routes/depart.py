@@ -40,8 +40,7 @@ def remove_node():
                 "predecessor": serialize_node_info(pred)
             })
         current_app.config['RING'] = new_ring
-        for n_info in new_ring:
-            print(f"  Node {n_info['ip']}:{n_info['port']} (id={n_info['id']}) -> predecessor: {n_info['predecessor']['id']}, successor: {n_info['successor']['id']}")
+        # for n_info in new_ring: print(f"  Node {n_info['ip']}:{n_info['port']} (id={n_info['id']}) -> predecessor: {n_info['predecessor']['id']}, successor: {n_info['successor']['id']}") #  DEBUG
     else:
         print("[Bootstrap] Ring is empty.")
 
@@ -50,10 +49,20 @@ def remove_node():
 @depart_bp.route("/depart", methods=["POST"])
 def depart():
     node = current_app.config['NODE']
+    overlay_url = f"http://{node.bootstrap_ip}:{node.bootstrap_port}/overlay"
+    try:
+        response = requests.get(overlay_url)
+        if response.status_code == 200:
+            overlay_info = response.json()
+            num_nodes = len(overlay_info.get("ring", []))
+            print(f"[Depart] Number of nodes in the ring: {num_nodes}")
+        else:
+            print(f"[Depart] Failed to get overlay info: {response.status_code}")
+    except requests.RequestException as e:
+        print(f"[Depart] Exception while getting overlay info: {e}")
     replication_factor = node.replication_factor
-    ring = current_app.config.get('RING', [])
-    if replication_factor > len(ring):
-        return jsonify({"error": "Replication factor is larger than the ring size"}), 400
+    if (num_nodes-1) < replication_factor:
+        return jsonify({"error": "Not enough nodes to depart"}), 400
     if node.is_bootstrap:
         return jsonify({"error": "Bootstrap does not depart"}), 400
     else:
@@ -95,7 +104,7 @@ def absorb_keys():
         # primary -> successor -> next node ... (with last node cleaning up stale replicas)
         node.async_replicate_insert(key, value, replication_factor - 1)
     
-    print(f"[{node.ip}:{node.port}] Absorbed keys from departing node: {list(keys.keys())}")
+    #print(f"[{node.ip}:{node.port}] Absorbed keys from departing node: {list(keys.keys())}") # DEBUG
     return jsonify({"message": "Keys absorbed and replication updated."}), 200
 
 @depart_bp.route("/cleanup_replicas_all", methods=["POST"])

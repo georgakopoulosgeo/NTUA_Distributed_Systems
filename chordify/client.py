@@ -82,12 +82,16 @@ def display_query_response(resp):
         result_from = resp.get("Result from", "N/A")
         status = resp.get("Status", "N/A")
         key = resp.get("Key", "N/A")
-        result_value = resp.get("Value", "N/A")
-        print(Fore.CYAN + "Result from:" + Style.RESET_ALL, result_from)
-        print(Fore.CYAN + "Status:" + Style.RESET_ALL, status)
-        print(Fore.CYAN + "Key:" + Style.RESET_ALL, key)
-        print(Fore.CYAN + "Value:" + Style.RESET_ALL, result_value)
-        print()
+        result_value = resp.get("result", "N/A")
+        if result_from == "N/A":
+            print(Fore.RED + "Key not found." + Style.RESET_ALL)
+            print()
+        else:
+            print(Fore.CYAN + "Result from:" + Style.RESET_ALL, result_from)
+            print(Fore.CYAN + "Status:" + Style.RESET_ALL, status)
+            print(Fore.CYAN + "Key:" + Style.RESET_ALL, key)
+            print(Fore.CYAN + "Value:" + Style.RESET_ALL, result_value)
+            print()
 
 def query_cmd(node_addr, key):
     url = f"http://{node_addr}/query"
@@ -210,30 +214,37 @@ def display_node_info(info):
     print(Fore.CYAN + "Port:" + Style.RESET_ALL, info.get("port"))
     print(Fore.CYAN + "Consistency Mode:" + Style.RESET_ALL, info.get("consistency_mode"))
     print(Fore.CYAN + "Replication Factor:" + Style.RESET_ALL, info.get("replication_factor"))
-    
-    # Optionally display data store and replica store if needed.
-    data_store = info.get("data_store")
-    if data_store:
-        print(Fore.CYAN + "Data Store:" + Style.RESET_ALL, data_store)
-    replica_store = info.get("replica_store")
-    if replica_store:
-        print(Fore.CYAN + "Replica Store:" + Style.RESET_ALL, replica_store)
 
-    # Format predecessor information.
+    data_store = info.get("data_store", {})
+    print(Fore.CYAN + "Data Store:" + Style.RESET_ALL)
+    if data_store:
+        for key, val in data_store.items():
+            print(f"  {key}: {val}")
+    else:
+        print("  {}")
+
+    replica_store = info.get("replica_store", {})
+    print(Fore.CYAN + "Replica Store:" + Style.RESET_ALL)
+    if replica_store:
+        for key, val in replica_store.items():
+            print(f"  {key}: {val}")
+    else:
+        print("  {}")
+
     predecessor = info.get("predecessor")
     if predecessor:
         print(Fore.CYAN + "Predecessor:" + Style.RESET_ALL)
         print("  ID: ", predecessor.get("id"))
         print("  IP: ", predecessor.get("ip"))
         print("  Port: ", predecessor.get("port"))
-    
-    # Format successor information.
+
     successor = info.get("successor")
     if successor:
         print(Fore.CYAN + "Successor:" + Style.RESET_ALL)
         print("  ID: ", successor.get("id"))
         print("  IP: ", successor.get("ip"))
         print("  Port: ", successor.get("port"))
+
     print()
 
 def nodeinfo_cmd(node_addr):

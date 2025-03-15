@@ -33,7 +33,20 @@ This project was developed as part of the Distributed Systems course at the Nati
 
 ## Introduction
 
-Chordify implements a simplified version of the Chord DHT protocol. Each node is responsible for a range of keys derived from applying the SHA1 hash on the combination `ip_address:port`. The basic operations include:
+Chordify implements a simplified version of the Chord DHT protocol. Each node is responsible for a range of keys derived from applying the SHA1 hash on the combination `ip_address:port`. 
+The SHA1-based hash function used to map keys to nodes in the DHT is:
+
+```python
+import hashlib
+
+def compute_hash(key):
+  h = hashlib.sha1(key.encode('utf-8')).hexdigest()
+  return int(h, 16)
+```
+
+This hash function ensures a uniform distribution of keys across the nodes, which helps balance the load and improve the system's scalability and fault tolerance.
+
+The basic operations of chordify include:
 
 - **insert(key, value):** Adds a new song or updates an existing one (by concatenating values).
 - **query(key):** Retrieves the value associated with a key; using `"*"` returns all key-value pairs across the DHT.

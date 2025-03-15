@@ -104,7 +104,7 @@ def local_query():
 def start_queries():
     data = request.get_json()
     file_number = data.get("file_number", "00")  # default file_number if not provided
-    file_path = f"./expirements/queries/query_{file_number}.txt"
+    file_path = f"./experiments/queries/query_{file_number}.txt"
 
     node = current_app.config["NODE"]
     port = node.port
