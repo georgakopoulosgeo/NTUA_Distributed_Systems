@@ -233,5 +233,6 @@ This experiment interleaves insert and query operations using a dedicated set of
 
 The results of the experiments on AWS VMs, are saved in the **schordify/experiments/results/** folder.
 
-####For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
+#### For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
 
+### Results
