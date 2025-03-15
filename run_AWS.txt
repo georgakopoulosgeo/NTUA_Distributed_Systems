@@ -58,3 +58,7 @@ curl -X GET http://10.0.62.183:8001/nodeinfo
 
 # Query all keys in the DHT on AWS.
 curl -X GET "http://10.0.62.183:8001/query?key=*"
+
+#############################################
+Client
+python3 client.py --node 10.0.62.44:8001
