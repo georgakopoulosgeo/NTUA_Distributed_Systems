@@ -124,13 +124,14 @@ sudo docker-compose build
 sudo docker-compose up
 ```
 These commands will create all containers specified in docker-compose.yml. The default ring that is provided is the following:
-![image](https://github.com/user-attachments/assets/945015cf-9d23-4305-8474-7f65eaa15a6a)
+![image](https://github.com/user-attachments/assets/ee3827e2-5457-4fd7-a462-982df726f496)
+
 IDs:
-  bootstrap: 0
-  node1: 171865491289448819003469989719053766790160449571
-  node4: 300958178807431293100459636149632972812029243419
-  node2: 1094592468334682115993406799157015824791113659155
-  node3: 1153412323553608433409003516544375445689255214539
+  - bootstrap: 0
+  - node1: 171865491289448819003469989719053766790160449571
+  - node4: 300958178807431293100459636149632972812029243419
+  - node2: 1094592468334682115993406799157015824791113659155
+  - node3: 1153412323553608433409003516544375445689255214539
 
 ### Step 3: Create more nodes
 To create an extra node for this network, use the following command:
