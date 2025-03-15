@@ -236,8 +236,11 @@ The results (.csv files) of the experiments on AWS VMs, are saved in the **schor
 
 ### Results
 When running the experiments on AWS with 10 nodes, we found that eventual consistency achieved significantly higher write and read throughputs with lower operation durations—especially at higher replication factors—while linearizability, despite its increased latency, consistently delivered fresher data with fewer stale reads.
+
 ![image](https://github.com/user-attachments/assets/597072b4-190d-46c9-8ff6-13af2119c645)
+
 ![image](https://github.com/user-attachments/assets/efba8d5c-69e7-4422-a5c3-8b91394cfa9e)
+
 ![image](https://github.com/user-attachments/assets/e1520337-dccd-4f37-b95d-c39d2f086ccd)
 
 
