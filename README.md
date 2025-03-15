@@ -124,7 +124,8 @@ sudo docker-compose build
 sudo docker-compose up
 ```
 These commands will create all containers specified in docker-compose.yml. The default ring that is provided is the following:
-![image](https://github.com/user-attachments/assets/ee3827e2-5457-4fd7-a462-982df726f496)
+![image](https://github.com/user-attachments/assets/ec481222-e60c-4051-9589-71dd2579a3aa)
+
 
 IDs:
   - bootstrap: 0
