@@ -38,7 +38,6 @@ The SHA1-based hash function used to map keys to nodes in the DHT is:
 
 ```python
 import hashlib
-
 def compute_hash(key):
   h = hashlib.sha1(key.encode('utf-8')).hexdigest()
   return int(h, 16)
