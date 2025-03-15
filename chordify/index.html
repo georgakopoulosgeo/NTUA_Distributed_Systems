@@ -158,8 +158,9 @@
               for (const songKey in originalSongs) {
                 const songValue = originalSongs[songKey];
                 const uniqueSong = getUniqueSong(songValue);
-                html += `<li>${uniqueSong}</li>`;
-              }
+                html += `<li>${songKey} - ${uniqueSong}</li>`;
+            }
+
               html += `</ul>`;
             } else {
               html += `<p><strong>Original Songs:</strong> None</p>`;
@@ -169,11 +170,11 @@
             const replicaSongs = data.all_songs[node].replica_songs;
             if (Object.keys(replicaSongs).length > 0) {
               html += `<p><strong>Replica Songs:</strong></p><ul>`;
-              for (const songKey in replicaSongs) {
-                const songValue = replicaSongs[songKey];
-                const uniqueSong = getUniqueSong(songValue);
-                html += `<li>${uniqueSong}</li>`;
-              }
+                for (const songKey in replicaSongs) {
+                  const songValue = replicaSongs[songKey];
+                  const uniqueSong = getUniqueSong(songValue);
+                  html += `<li>${songKey} - ${uniqueSong}</li>`;
+                }
               html += `</ul>`;
             } else {
               html += `<p><strong>Replica Songs:</strong> None</p>`;
@@ -184,13 +185,14 @@
         }
         // Otherwise, handle regular query responses
         else if (data.result !== undefined) {
-        // Deduplicate the song names before displaying
-        const uniqueResult = getUniqueSong(data.result);
-        resultContainer.innerHTML = `
-          <p><strong>Query Success!</strong></p>
-          <p><strong>Value:</strong> ${uniqueResult}</p>
-          <p><strong>Source:</strong> ${data["Result from"] || data.source}</p>
-        `;} 
+          const uniqueResult = getUniqueSong(data.result);
+          resultContainer.innerHTML = `
+            <p><strong>Query Success!</strong></p>
+            <p><strong>Key:</strong> ${data.key}</p>
+            <p><strong>Value:</strong> ${uniqueResult}</p>
+            <p><strong>Source:</strong> ${data["Result from"] || data.source}</p>
+          `;
+        }
         break;
 
         case 'overlay':
@@ -262,9 +264,13 @@
         return;
       }
       fetch(`http://${currentNodeAddress}/query?key=${encodeURIComponent(key)}`)
-      .then(response => response.json())
-      .then(data => displayResult(data, 'query'))
-      .catch(err => displayError(err));
+        .then(response => response.json())
+        .then(data => {
+          // Attach the query key manually if it's not provided by the backend
+          data.key = data.key || key;
+          displayResult(data, 'query');
+        })
+        .catch(err => displayError(err));
     }
 
     function handleDelete() {

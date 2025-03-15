@@ -38,7 +38,6 @@ The SHA1-based hash function used to map keys to nodes in the DHT is:
 
 ```python
 import hashlib
-
 def compute_hash(key):
   h = hashlib.sha1(key.encode('utf-8')).hexdigest()
   return int(h, 16)
@@ -124,7 +123,19 @@ To build and run the entire system using Docker Compose, use the following comma
 sudo docker-compose build
 sudo docker-compose up
 ```
-These commands will create all containers specified in docker-compose.yml
+These commands will create all containers specified in docker-compose.yml. 
+
+The default ring that is provided is the following:
+
+![image](https://github.com/user-attachments/assets/ec481222-e60c-4051-9589-71dd2579a3aa)
+
+
+IDs:
+  - bootstrap: 0
+  - node1: 171865491289448819003469989719053766790160449571
+  - node4: 300958178807431293100459636149632972812029243419
+  - node2: 1094592468334682115993406799157015824791113659155
+  - node3: 1153412323553608433409003516544375445689255214539
 
 ### Step 3: Create more nodes
 To create an extra node for this network, use the following command:
@@ -172,7 +183,7 @@ Deploy the bootstrap node and additional nodes on the VMs:
 
 ```bash
 cd chordify/scripts/
-sudo chmod +x deploy_bootstrap.sh deploy_node.sh
+sudo chmod +x deploy_bootstrap.sh deploy_nodes.sh
 ```
 For the first VM:
 ```bash
@@ -180,7 +191,7 @@ sudo ./deploy_bootstrap.sh
 ```
 For the other VMs:
 ```bash
-sudo ./deploy_node.sh
+sudo ./deploy_nodes.sh
 ```
 ## Client and Frontend Usage
 After deployment, you can interact with the Chordify network in two ways:
@@ -232,8 +243,16 @@ This experiment interleaves insert and query operations using a dedicated set of
   python3 request_experiment.py --bootstrap_ip <ip> --bootstrap_port <port> --num_nodes n
   ```
 
-The results of the experiments on AWS VMs, are saved in the **schordify/experiments/results/** folder.
-
-#### For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
+The results (.csv files) of the experiments on AWS VMs, are saved in the **schordify/experiments/results/** folder.
 
 ### Results
+When running the experiments on AWS with 10 nodes, we found that eventual consistency achieved significantly higher write and read throughputs with lower operation durations—especially at higher replication factors—while linearizability, despite its increased latency, consistently delivered fresher data with fewer stale reads.
+
+![image](https://github.com/user-attachments/assets/597072b4-190d-46c9-8ff6-13af2119c645)
+
+![image](https://github.com/user-attachments/assets/efba8d5c-69e7-4422-a5c3-8b91394cfa9e)
+
+![image](https://github.com/user-attachments/assets/e1520337-dccd-4f37-b95d-c39d2f086ccd)
+
+
+#### For a detailed description of the experimental setups, an in-depth explanation of the results, and the final conclusions, please refer to the report.pdf.
