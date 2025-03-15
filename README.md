@@ -159,7 +159,8 @@ git pull
 ```
 
 ### Step 2: Stop and remove all containers, then build the Docker image
-Make sure there are no previous containers running and build the Docker image:
+Make sure there are no previous containers running and build the Docker image.
+Run these commands in **/chordify**
 
 ```bash
 sudo docker rm -f $(sudo docker ps -aq)

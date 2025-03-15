@@ -192,3 +192,7 @@ curl -X GET "http://127.0.0.1:8001/nodeinfo"
 curl -X GET "http://127.0.0.1:8004/nodeinfo"
 curl -X GET "http://127.0.0.1:8002/nodeinfo"
 curl -X GET "http://127.0.0.1:8003/nodeinfo"
+
+#############################################
+Client
+ python3 client.py --node 127.0.0.1:8001
