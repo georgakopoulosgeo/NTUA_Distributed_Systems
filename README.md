@@ -123,7 +123,19 @@ To build and run the entire system using Docker Compose, use the following comma
 sudo docker-compose build
 sudo docker-compose up
 ```
-These commands will create all containers specified in docker-compose.yml
+These commands will create all containers specified in docker-compose.yml. 
+
+The default ring that is provided is the following:
+
+![image](https://github.com/user-attachments/assets/ec481222-e60c-4051-9589-71dd2579a3aa)
+
+
+IDs:
+  - bootstrap: 0
+  - node1: 171865491289448819003469989719053766790160449571
+  - node4: 300958178807431293100459636149632972812029243419
+  - node2: 1094592468334682115993406799157015824791113659155
+  - node3: 1153412323553608433409003516544375445689255214539
 
 ### Step 3: Create more nodes
 To create an extra node for this network, use the following command:
