@@ -47,13 +47,6 @@ def _start_queries_on_node(node_addr, file_number, results, index):
         }
 
 def run_distributed_query_experiment(bootstrap_addr, num_nodes=5, local_flag=False):
-    """
-    1. Fetches the overlay from the bootstrap node.
-    2. Sorts the ring entries by 'id'.
-    3. For the first num_nodes, spawns a thread that sends a /start_queries request.
-       The file_number is set as a two-digit string (e.g. "00", "01", etc.).
-    4. Waits for all threads to finish and prints the results.
-    """
     overlay_data = get_overlay(bootstrap_addr)
     ring = overlay_data.get("ring", [])
 

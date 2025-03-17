@@ -331,12 +331,20 @@ class Node:
                 "result": local_value 
             }
         else:
-            result = {
-                "Result from": responding_node,
-                "Status": "Replica Song",
-                "Key": key,
-                "result": local_value
-            }
+            if self.consistency_mode == "linearizability":
+                result = {
+                    "Result from": responding_node,
+                    "Status": "Replica Song from Tail Node",
+                    "Key": key,
+                    "result": local_value
+                }
+            else:
+                result = {
+                    "Result from": responding_node,
+                    "Status": "Replica Song",
+                    "Key": key,
+                    "result": local_value
+                }
 
          # If the key is not found locally, immediately return a "not found" result.
         if local_value is None:
