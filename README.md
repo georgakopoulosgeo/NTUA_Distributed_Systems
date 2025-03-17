@@ -1,6 +1,6 @@
 # Chordify
 
-Chordify is a peer-to-peer (P2P) music sharing application built on top of the Chord Distributed Hash Table (DHT) protocol. In this project, nodes share song metadata (with the song title as the key and a string representing the node's address as the value). The system supports dynamic node joining and graceful departures, data replication across multiple nodes, and two consistency modes—linearizability and eventual consistency.
+Chordify is a peer-to-peer (P2P) music sharing application built on top of the Chord Distributed Hash Table (DHT) protocol. In this project, nodes share song metadata (with the song title as the key and a string representing the node's address as the value). The system supports dynamic node joining and graceful departures, data replication across multiple nodes, and two consistency modes-linearizability and eventual consistency.
 
 This project was developed as part of the Distributed Systems course at the National Technical University of Athens (NTUA) for the 2024-2025 academic year.
 
@@ -246,7 +246,7 @@ This experiment interleaves insert and query operations using a dedicated set of
 The results (.csv files) of the experiments on AWS VMs, are saved in the **schordify/experiments/results/** folder.
 
 ### Results
-When running the experiments on AWS with 10 nodes, we found that eventual consistency achieved significantly higher write and read throughputs with lower operation durations—especially at higher replication factors—while linearizability, despite its increased latency, consistently delivered fresher data with fewer stale reads.
+When running the experiments on AWS with 10 nodes, we found that eventual consistency achieved significantly higher write and read throughputs with lower operation durations-especially at higher replication factors-while linearizability, despite its increased latency, consistently delivered fresher data with fewer stale reads.
 
 ![image](https://github.com/user-attachments/assets/597072b4-190d-46c9-8ff6-13af2119c645)
 
