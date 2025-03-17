@@ -134,12 +134,12 @@
         case 'insert':
           if (data.result === true) {
             resultContainer.innerHTML = `
-              <p><strong>Insert Successful!</strong></p>
+              <p><strong>Insertion Successful!</strong></p>
               <p>${data.message}</p>
             `;
           } else {
             resultContainer.innerHTML = `
-              <p><strong>Insert Failed:</strong> ${data.error || 'Unknown error'}</p>
+              <p><strong>Insertion Failed:</strong> ${data.error || 'Unknown error'}</p>
             `;
           }
           break;
@@ -196,6 +196,19 @@
               <p><strong>Key:</strong> ${data.key}</p>
               <p><strong>Value:</strong> ${uniqueResult}</p>
               <p><strong>Source:</strong> ${data["Result from"] || data.source}</p>
+            `;
+          }
+          break;
+
+        case 'delete':
+          if (data.result === true) {
+            resultContainer.innerHTML = `
+              <p><strong>Deletion Successful!</strong></p>
+              <p>${data.message}</p>
+            `;
+          } else {
+            resultContainer.innerHTML = `
+              <p><strong>Deletion Failed Failed:</strong> ${data.error || 'Unknown error'}</p>
             `;
           }
           break;
