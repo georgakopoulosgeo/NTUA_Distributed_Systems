@@ -28,7 +28,7 @@ python3 request_experiment.py --bootstrap_ip 10.0.62.44 --bootstrap_port 8000 --
 
 # Change configuration: update replication factor and consistency mode.
 curl -X POST -H "Content-Type: application/json" \
-     -d '{"replication_factor": 1, "consistency_mode": "linearizability"}' \
+     -d '{"replication_factor": 3, "consistency_mode": "linearizability"}' \
      http://10.0.62.44:8000/update_settings
 
 #############################################

@@ -17,7 +17,7 @@ def join():
     # Access the node instance from the app config
     node = current_app.config['NODE']
     if not node.is_bootstrap:
-        return jsonify({"error": "Μόνο ο bootstrap κόμβος δέχεται join requests"}), 400
+        return jsonify({"error": "Only the bootstrap node can handle join requests"}), 400
 
     data = request.get_json()
     new_node_info = {
