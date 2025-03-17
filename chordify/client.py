@@ -15,8 +15,8 @@ def display_insert_response(resp):
     message = resp.get("message", "No message provided")
     print(Fore.CYAN + "Message:" + Style.RESET_ALL, message)
     
-    ip = resp.get("ip", "N/A")
-    print(Fore.CYAN + "IP:" + Style.RESET_ALL, ip)
+    addr = resp.get("address", "N/A")
+    print(Fore.CYAN + "Address:" + Style.RESET_ALL, addr)
     
     data_store = resp.get("data_store", {})
     if data_store:
@@ -113,8 +113,8 @@ def display_delete_response(resp):
     message = resp.get("message", "No message provided")
     print(Fore.CYAN + "Message:" + Style.RESET_ALL, message)
     
-    ip = resp.get("ip", "N/A")
-    print(Fore.CYAN + "IP:" + Style.RESET_ALL, ip)
+    addr = resp.get("address", "N/A")
+    print(Fore.CYAN + "Address:" + Style.RESET_ALL, addr)
     
     data_store = resp.get("data_store", {})
     if data_store:

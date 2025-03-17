@@ -85,15 +85,15 @@ class Node:
             # If the node is responsible for the key, insert it locally.
             if key in self.data_store:
                 self.data_store[key] += f" | {value}"
-                msg = f"Key '{key}' updated at node {self.ip}."
+                msg = f"Key '{key}' updated at node {self.ip}:{self.port}."
             else:
                 self.data_store[key] = value
-                msg = f"Key '{key}' inserted at node {self.ip}."
+                msg = f"Key '{key}' inserted at node {self.ip}:{self.port}."
 
             final_result = {
                 "result": True,
                 "message": msg,
-                "ip": self.ip,
+                "address": f"{self.ip}:{self.port}",
                 "data_store": self.data_store
             }
 
@@ -331,12 +331,20 @@ class Node:
                 "result": local_value 
             }
         else:
-            result = {
-                "Result from": responding_node,
-                "Status": "Replica Song",
-                "Key": key,
-                "result": local_value
-            }
+            if self.consistency_mode == "linearizability":
+                result = {
+                    "Result from": responding_node,
+                    "Status": "Replica Song from Tail Node",
+                    "Key": key,
+                    "result": local_value
+                }
+            else:
+                result = {
+                    "Result from": responding_node,
+                    "Status": "Replica Song",
+                    "Key": key,
+                    "result": local_value
+                }
 
          # If the key is not found locally, immediately return a "not found" result.
         if local_value is None:
@@ -440,16 +448,16 @@ class Node:
             # We are the responsible node => remove from our data_store
             if key in self.data_store:
                 del self.data_store[key]
-                msg = f"Key '{key}' deleted from node {self.ip}."
+                msg = f"Key '{key}' deleted from node {self.ip}:{self.port}."
                 result = True
             else:
-                msg = f"Key '{key}' not found on node {self.ip}."
+                msg = f"Key '{key}' not found on node {self.ip}:{self.port}."
                 result = False
 
             final_result = {
                 "result": result,
                 "message": msg,
-                "ip": self.ip,
+                "address": f"{self.ip}:{self.port}",
                 "data_store": self.data_store
             }
             print(f"[{self.ip}:{self.port}] {msg}")

@@ -20,12 +20,7 @@ def get_info(bootstrap_addr):
     }
 
 def _start_inserts_on_node(node_addr, file_number, results, index):
-    """
-    Thread worker function that:
-      1. POSTs /start_inserts to the node_addr
-      2. Passes {"file_number": file_number} as JSON
-      3. Stores the response (or any error) in results[index]
-    """
+    # Thread worker that POSTs to /start_inserts on node_addr with the given file_number.
     url = f"http://{node_addr}/start_inserts"
     payload = {"file_number": file_number}
     start_time = time.time()
@@ -53,13 +48,6 @@ def _start_inserts_on_node(node_addr, file_number, results, index):
         }
 
 def run_distributed_insert_experiment(bootstrap_addr, num_nodes=5, local_flag=False):
-    """
-    1) Fetches the overlay from bootstrap_addr
-    2) Sorts the ring by 'id' (or any consistent key)
-    3) Spawns threads for the first 'num_nodes' in the ring
-    4) Sends each node a "file_number" = i in two-digit format ("00","01",...)
-    5) Waits for all threads and prints results
-    """
     overlay_data = get_overlay(bootstrap_addr)
     ring = overlay_data.get("ring", [])
 
