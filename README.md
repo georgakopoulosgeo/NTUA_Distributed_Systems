@@ -6,6 +6,10 @@ This project was developed as part of the Distributed Systems course at the Nati
 
 ---
 
+## Grade: ***100/100***
+
+---
+
 ## Table of Contents
 
 - [Introduction](#introduction)
