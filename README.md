@@ -4,11 +4,7 @@ Chordify is a peer-to-peer (P2P) music sharing application built on top of the C
 
 This project was developed as part of the Distributed Systems course at the National Technical University of Athens (NTUA) for the 2024-2025 academic year.
 
----
-
 ## Grade: ***100/100***
-
----
 
 ## Table of Contents
 
